@@ -30,7 +30,7 @@ export default function Login() {
           <div className="login-hero-logo" style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
             <img src="/logo.png" alt="SoLago" style={{ width: '42px', height: '42px', objectFit: 'contain' }} />
           </div>
-          <span className="login-hero-brand"><span style="color:#f59e0b">So</span><span style="color:#0284c7">Lago</span></span>
+          <span className="login-hero-brand"><span style={{ color: '#f59e0b' }}>So</span><span style={{ color: '#0284c7' }}>Lago</span></span>
         </div>
 
         <div className="login-hero-content">
