@@ -52,6 +52,26 @@ function AppContent() {
   const [overrideCustomerMenu, setOverrideCustomerMenu] = useState(false);
   const [menuCollapsed, setMenuCollapsed] = useState(true); // por defecto contraído en móviles
 
+  // Estados de control de sucursales
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [newBranchForm, setNewBranchForm] = useState({
+    name: '', address: '', phone: '', manager: ''
+  });
+
+  // Detectar si la URL fue abierta mediante un escáner de QR o link directo de cliente
+  const isCustomerMenuUrl = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.has('mesa') || 
+      params.has('table') || 
+      params.has('m') || 
+      params.has('mode') || 
+      params.get('view') === 'showcase' || 
+      params.get('menu') === 'true'
+    );
+  }, []);
+
   const isAdmin = !user?.role || user?.role === 'admin' || user?.role === 'Administrador' || user?.role === 'nexusowner' || user?.role === 'owner';
   const hasBranches = Array.isArray(branches) && branches.length > 0;
 
@@ -73,13 +93,6 @@ function AppContent() {
     return userMods[moduleKey] !== false;
   };
 
-  // Estados de control de sucursales
-  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
-  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
-  const [newBranchForm, setNewBranchForm] = useState({
-    name: '', address: '', phone: '', manager: ''
-  });
-
   const handleCreateBranchSubmit = async (e) => {
     e.preventDefault();
     if (!newBranchForm.name.trim()) return;
@@ -89,19 +102,6 @@ function AppContent() {
     setNewBranchForm({ name: '', address: '', phone: '', manager: '' });
     alert(`✅ Sucursal "${newBranchForm.name}" creada e integrada correctamente.`);
   };
-
-  // Detectar si la URL fue abierta mediante un escáner de QR o link directo de cliente
-  const isCustomerMenuUrl = React.useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (
-      params.has('mesa') || 
-      params.has('table') || 
-      params.has('m') || 
-      params.has('mode') || 
-      params.get('view') === 'showcase' || 
-      params.get('menu') === 'true'
-    );
-  }, []);
 
   // Actualización dinámica del favicon e ícono del navegador con el logo de la empresa
   useEffect(() => {
