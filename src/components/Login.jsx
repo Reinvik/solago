@@ -62,8 +62,8 @@ export default function Login() {
             </span>
           </h1>
 
-          <p className="login-hero-subtitle">
-            Descubre las ventajas de SoLago, diseñado para maximizar tus ventas de retail, automatizar tu control administrativo y conectar con tus clientes al instante.
+          <p className="login-hero-subtitle" style={{ lineHeight: '1.7' }}>
+            <strong style={{ color: '#ffffff' }}>SoLago</strong> es el acrónimo de <strong style={{ color: '#ffa100' }}>S</strong>oftware <strong style={{ color: '#ffa100' }}>O</strong>nline para <strong style={{ color: '#3b82f6' }}>L</strong>ocales, <strong style={{ color: '#3b82f6' }}>A</strong>dministración y <strong style={{ color: '#3b82f6' }}>G</strong>estión <strong style={{ color: '#3b82f6' }}>O</strong>perativa. Una plataforma integral diseñada para potenciar las ventas de tu negocio en tiempo real.
           </p>
 
           <div className="login-features-list">
