@@ -26,11 +26,21 @@ export default function Login() {
     <div className="login-split-container">
       {/* Panel Izquierdo: Ventajas Explicativas (Hero) */}
       <div className="login-left-hero">
-        <div className="login-hero-header">
-          <div className="login-hero-logo" style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
-            <img src="/logo.png" alt="SoLago" style={{ width: '42px', height: '42px', objectFit: 'contain' }} />
+        <div className="login-hero-header" style={{ gap: '16px' }}>
+          <div className="login-hero-logo" style={{ width: '64px', height: '64px', background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
+            <img src="/logo.png" alt="SoLago" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
-          <span className="login-hero-brand"><span style={{ color: '#f59e0b' }}>So</span><span style={{ color: '#0284c7' }}>Lago</span></span>
+          <span className="login-hero-brand" style={{ 
+            fontFamily: "'Outfit', sans-serif", 
+            fontSize: '34px', 
+            fontWeight: '900', 
+            letterSpacing: '-0.05em', 
+            display: 'inline-flex',
+            textShadow: '1px 2px 3px rgba(0, 0, 0, 0.4)'
+          }}>
+            <span style={{ color: '#ffa100' }}>So</span>
+            <span style={{ color: '#2563eb' }}>Lago</span>
+          </span>
         </div>
 
         <div className="login-hero-content">
