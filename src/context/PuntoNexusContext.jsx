@@ -46,6 +46,60 @@ const DEFAULT_TABLES = [
   { id: 'tbl-5', number: 'Barra 1', name: 'Barra Principal', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null }
 ];
 
+const GLOBAL_GLOBAL_DEFAULT_FIXED_COSTS = {
+  rent: 500,
+  salaries: 1200,
+  services: 180,
+  software: 50,
+  marketing: 100,
+  other: 70
+};
+
+const GLOBAL_GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
+  rent: 0,
+  salaries: 0,
+  services: 0,
+  software: 0,
+  marketing: 0,
+  other: 0
+};
+
+const GLOBAL_GLOBAL_DEFAULT_EXPENSES = [
+  {
+    id: 'exp-1',
+    description: 'Arriendo de Local Comercial',
+    category: 'Arriendo / Alquiler',
+    amount: 500,
+    date: new Date().toISOString().split('T')[0],
+    payment_method: 'Transferencia',
+    status: 'Pagado',
+    supplier: 'Inmobiliaria Central',
+    branch_id: 'branch-matriz'
+  },
+  {
+    id: 'exp-2',
+    description: 'Pago de Electricidad e Internet',
+    category: 'Servicios Públicos',
+    amount: 180,
+    date: new Date().toISOString().split('T')[0],
+    payment_method: 'Transferencia',
+    status: 'Pagado',
+    supplier: 'Enel / Movistar',
+    branch_id: 'branch-matriz'
+  },
+  {
+    id: 'exp-3',
+    description: 'Compra de Insumos y Empaques',
+    category: 'Materia Prima / Insumos',
+    amount: 250,
+    date: new Date().toISOString().split('T')[0],
+    payment_method: 'Efectivo',
+    status: 'Pagado',
+    supplier: 'Distribuidora Mayorista',
+    branch_id: 'branch-matriz'
+  }
+];
+
 export const PuntoNexusProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('punto_nexus_user');
@@ -3732,60 +3786,7 @@ export const PuntoNexusProvider = ({ children }) => {
     return { success: true };
   };
 
-  // --- MÓDULO DE FINANZAS, EGRESOS & PUNTO DE EQUILIBRIO ---
-  const DEFAULT_FIXED_COSTS = useMemo(() => ({
-    rent: 500,
-    salaries: 1200,
-    services: 180,
-    software: 50,
-    marketing: 100,
-    other: 70
-  }), []);
 
-  const DEFAULT_EXPENSES = useMemo(() => [
-    {
-      id: 'exp-1',
-      description: 'Arriendo de Local Comercial',
-      category: 'Arriendo / Alquiler',
-      amount: 500,
-      date: new Date().toISOString().split('T')[0],
-      payment_method: 'Transferencia',
-      status: 'Pagado',
-      supplier: 'Inmobiliaria Central',
-      branch_id: activeBranchId || 'branch-matriz'
-    },
-    {
-      id: 'exp-2',
-      description: 'Pago de Electricidad e Internet',
-      category: 'Servicios Públicos',
-      amount: 180,
-      date: new Date().toISOString().split('T')[0],
-      payment_method: 'Transferencia',
-      status: 'Pagado',
-      supplier: 'Enel / Movistar',
-      branch_id: activeBranchId || 'branch-matriz'
-    },
-    {
-      id: 'exp-3',
-      description: 'Compra de Insumos y Empaques',
-      category: 'Materia Prima / Insumos',
-      amount: 250,
-      date: new Date().toISOString().split('T')[0],
-      payment_method: 'Efectivo',
-      status: 'Pagado',
-      supplier: 'Distribuidora Mayorista',
-      branch_id: activeBranchId || 'branch-matriz'
-    }
-  ], [activeBranchId]);
-
-  const DEFAULT_EMPTY_FIXED_COSTS = useMemo(() => ({
-    rent: 0,
-    salaries: 0,
-    services: 0,
-    software: 0,
-    marketing: 0,
-    other: 0
-  }), []);
 
   const [fixedCostsMap, setFixedCostsMap] = useState(() => {
     const mapKey = `punto_nexus_fixed_costs_by_branch_${companyId || 'default'}`;
@@ -3796,7 +3797,7 @@ export const PuntoNexusProvider = ({ children }) => {
       } catch (e) {}
     }
     const legacySaved = localStorage.getItem(`punto_nexus_fixed_costs_${companyId || 'default'}`);
-    const legacyCosts = legacySaved ? JSON.parse(legacySaved) : DEFAULT_FIXED_COSTS;
+    const legacyCosts = legacySaved ? JSON.parse(legacySaved) : GLOBAL_DEFAULT_FIXED_COSTS;
     return {
       'branch-matriz': legacyCosts
     };
@@ -3814,14 +3815,14 @@ export const PuntoNexusProvider = ({ children }) => {
       return fixedCostsMap[bId];
     }
     if (bId === 'branch-matriz') {
-      return DEFAULT_FIXED_COSTS;
+      return GLOBAL_DEFAULT_FIXED_COSTS;
     }
-    return DEFAULT_EMPTY_FIXED_COSTS;
-  }, [fixedCostsMap, activeBranchId, DEFAULT_FIXED_COSTS, DEFAULT_EMPTY_FIXED_COSTS]);
+    return GLOBAL_DEFAULT_EMPTY_FIXED_COSTS;
+  }, [fixedCostsMap, activeBranchId, GLOBAL_DEFAULT_FIXED_COSTS, GLOBAL_DEFAULT_EMPTY_FIXED_COSTS]);
 
   const [expenses, setExpenses] = useState(() => {
     const saved = localStorage.getItem(`punto_nexus_expenses_${companyId || 'default'}`);
-    return saved ? JSON.parse(saved) : DEFAULT_EXPENSES;
+    return saved ? JSON.parse(saved) : GLOBAL_DEFAULT_EXPENSES;
   });
 
   useEffect(() => {
@@ -3833,7 +3834,7 @@ export const PuntoNexusProvider = ({ children }) => {
   const updateFixedCosts = (newCosts) => {
     const bId = activeBranchId || 'branch-matriz';
     setFixedCostsMap(prev => {
-      const current = prev[bId] || (bId === 'branch-matriz' ? DEFAULT_FIXED_COSTS : DEFAULT_EMPTY_FIXED_COSTS);
+      const current = prev[bId] || (bId === 'branch-matriz' ? GLOBAL_DEFAULT_FIXED_COSTS : GLOBAL_DEFAULT_EMPTY_FIXED_COSTS);
       const updatedBranchCosts = { ...current, ...newCosts };
       const updatedMap = { ...prev, [bId]: updatedBranchCosts };
       if (companyId) {
