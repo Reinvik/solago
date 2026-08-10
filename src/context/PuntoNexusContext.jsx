@@ -46,7 +46,7 @@ const DEFAULT_TABLES = [
   { id: 'tbl-5', number: 'Barra 1', name: 'Barra Principal', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null }
 ];
 
-const GLOBAL_GLOBAL_DEFAULT_FIXED_COSTS = {
+const GLOBAL_DEFAULT_FIXED_COSTS = {
   rent: 500,
   salaries: 1200,
   services: 180,
@@ -55,7 +55,7 @@ const GLOBAL_GLOBAL_DEFAULT_FIXED_COSTS = {
   other: 70
 };
 
-const GLOBAL_GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
+const GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
   rent: 0,
   salaries: 0,
   services: 0,
@@ -64,7 +64,7 @@ const GLOBAL_GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
   other: 0
 };
 
-const GLOBAL_GLOBAL_DEFAULT_EXPENSES = [
+const GLOBAL_DEFAULT_EXPENSES = [
   {
     id: 'exp-1',
     description: 'Arriendo de Local Comercial',
