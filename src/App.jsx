@@ -103,6 +103,22 @@ function AppContent() {
     );
   }, []);
 
+  // Actualización dinámica del favicon e ícono del navegador con el logo de la empresa
+  useEffect(() => {
+    if (companySettings?.logo_url) {
+      let link = document.querySelector("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'shortcut icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = companySettings.logo_url;
+    }
+    if (companyName) {
+      document.title = `${companyName} - SoLago`;
+    }
+  }, [companySettings?.logo_url, companyName]);
+
   // Si se detectó URL de menú cliente QR y el usuario no ha forzado volver al admin:
   if (isCustomerMenuUrl && !overrideCustomerMenu) {
     return (
@@ -128,22 +144,6 @@ function AppContent() {
       </div>
     );
   }
-
-  // Actualización dinámica del favicon e ícono del navegador con el logo de la empresa
-  React.useEffect(() => {
-    if (companySettings?.logo_url) {
-      let link = document.querySelector("link[rel*='icon']");
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'shortcut icon';
-        document.getElementsByTagName('head')[0].appendChild(link);
-      }
-      link.href = companySettings.logo_url;
-    }
-    if (companyName) {
-      document.title = `${companyName} - SoLago`;
-    }
-  }, [companySettings?.logo_url, companyName]);
 
   // Si no está autenticado y es navegación normal, renderizar Login
   if (!user) {
