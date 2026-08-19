@@ -484,6 +484,26 @@ export const PuntoNexusProvider = ({ children }) => {
           }
         }
 
+        // Fallback directo desde el cliente si /api/exchange-rates no retorna tasa
+        if (!fetchedBcv) {
+          try {
+            const rBcv = await fetch('https://ve.dolarapi.com/v1/dolares/oficial').catch(() => null);
+            if (rBcv?.ok) {
+              const d = await rBcv.json().catch(() => null);
+              if (d?.promedio) fetchedBcv = Number(d.promedio);
+            }
+          } catch (e) {}
+        }
+        if (!fetchedParalelo) {
+          try {
+            const rPar = await fetch('https://ve.dolarapi.com/v1/dolares/paralelo').catch(() => null);
+            if (rPar?.ok) {
+              const d = await rPar.json().catch(() => null);
+              if (d?.promedio) fetchedParalelo = Number(d.promedio);
+            }
+          } catch (e) {}
+        }
+
         if (fetchedBcv > 1) {
           setBcvRate(fetchedBcv);
           localStorage.setItem('punto_nexus_bcv_rate', String(fetchedBcv));
@@ -502,19 +522,22 @@ export const PuntoNexusProvider = ({ children }) => {
           setBcvLastUpdated(`${today} (${currentSlot})`);
 
           // Sincronizar automáticamente la tasa activa de la empresa
-          const activeSource = companySettings?.exchange_rate_source || 'bcv';
-          if (activeSource !== 'manual') {
-            const activeRateVal = activeSource === 'bcv'
-              ? fetchedBcv
-              : (activeSource === 'euro' ? fetchedEuro : (fetchedParalelo || fetchedBcv));
-            if (activeRateVal > 1) {
-              setCompanySettings(prev => ({ ...prev, exchange_rate: activeRateVal }));
+          setCompanySettings(prev => {
+            const activeSource = prev?.exchange_rate_source || 'bcv';
+            if (activeSource !== 'manual') {
+              const activeRateVal = activeSource === 'bcv'
+                ? fetchedBcv
+                : (activeSource === 'euro' ? (fetchedEuro || fetchedBcv) : (fetchedParalelo || fetchedBcv));
+              if (activeRateVal > 1) {
+                return { ...prev, exchange_rate: activeRateVal };
+              }
             }
-          }
-          console.info(`[SoLago - MontosVE] Tasas actualizadas (${currentSlot}) — BCV: ${fetchedBcv} | EUR: ${fetchedEuro} | Paralelo: ${fetchedParalelo}`);
+            return prev;
+          });
+          console.info(`[SoLago - MontosVE/DolarApi] Tasas actualizadas (${currentSlot}) — BCV: ${fetchedBcv} | EUR: ${fetchedEuro} | Paralelo: ${fetchedParalelo}`);
         }
       } catch (err) {
-        console.warn('[SoLago] Auto-sync BCV/EUR (MontosVE) falló silenciosamente:', err.message);
+        console.warn('[SoLago] Auto-sync BCV/EUR falló silenciosamente:', err.message);
       }
     };
 
@@ -1505,10 +1528,22 @@ export const PuntoNexusProvider = ({ children }) => {
                 ...customMeta
               };
 
-              setCompanySettings(prev => ({
-                ...prev,
-                ...finalSettings
-              }));
+              setCompanySettings(prev => {
+                const merged = { ...prev, ...finalSettings };
+                const source = merged.exchange_rate_source || 'bcv';
+                if (source !== 'manual') {
+                  const cachedBcv = Number(localStorage.getItem('punto_nexus_bcv_rate')) || 0;
+                  const cachedEuro = Number(localStorage.getItem('punto_nexus_euro_rate')) || 0;
+                  const cachedParalelo = Number(localStorage.getItem('punto_nexus_paralelo_rate')) || 0;
+                  const liveRate = source === 'bcv' ? (bcvRate || cachedBcv || merged.exchange_rate)
+                    : source === 'euro' ? (euroRate || cachedEuro || merged.exchange_rate)
+                    : (paraleloRate || cachedParalelo || merged.exchange_rate);
+                  if (liveRate > 1) {
+                    merged.exchange_rate = liveRate;
+                  }
+                }
+                return merged;
+              });
 
               if (finalSettings.company_name) {
                 setCompanyName(finalSettings.company_name);
@@ -1745,6 +1780,26 @@ export const PuntoNexusProvider = ({ children }) => {
           fetchedEuroRate = Number(data.euro || 0);
           fetchedParaleloRate = Number(data.paralelo || 0);
         }
+      }
+
+      // Fallback directo desde el cliente si /api/exchange-rates no retorna tasa
+      if (!fetchedBcvRate) {
+        try {
+          const rBcv = await fetch('https://ve.dolarapi.com/v1/dolares/oficial').catch(() => null);
+          if (rBcv?.ok) {
+            const d = await rBcv.json().catch(() => null);
+            if (d?.promedio) fetchedBcvRate = Number(d.promedio);
+          }
+        } catch (e) {}
+      }
+      if (!fetchedParaleloRate) {
+        try {
+          const rPar = await fetch('https://ve.dolarapi.com/v1/dolares/paralelo').catch(() => null);
+          if (rPar?.ok) {
+            const d = await rPar.json().catch(() => null);
+            if (d?.promedio) fetchedParaleloRate = Number(d.promedio);
+          }
+        } catch (e) {}
       }
 
       if (fetchedBcvRate > 1) {
