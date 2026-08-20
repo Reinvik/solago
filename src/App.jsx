@@ -103,19 +103,22 @@ function AppContent() {
     alert(`✅ Sucursal "${newBranchForm.name}" creada e integrada correctamente.`);
   };
 
-  // Actualización dinámica del favicon e ícono del navegador con el logo de la empresa
+  // Actualización dinámica del favicon e ícono del navegador con el logo de la empresa (SoLago / Punto Nexus)
   useEffect(() => {
-    if (companySettings?.logo_url) {
-      let link = document.querySelector("link[rel*='icon']");
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'shortcut icon';
-        document.getElementsByTagName('head')[0].appendChild(link);
-      }
-      link.href = companySettings.logo_url;
+    const isSolagoDomain = window.location.hostname.includes('solago') || companyName?.toLowerCase().includes('solago');
+    const brandSuffix = isSolagoDomain ? 'SoLago' : 'Punto Nexus';
+    const logoUrl = companySettings?.logo_url || '/logo.png';
+
+    let link = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.getElementsByTagName('head')[0].appendChild(link);
     }
+    link.href = logoUrl;
+
     if (companyName) {
-      document.title = `${companyName} - SoLago`;
+      document.title = `${companyName} - ${brandSuffix}`;
     }
   }, [companySettings?.logo_url, companyName]);
 
