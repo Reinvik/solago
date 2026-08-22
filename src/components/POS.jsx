@@ -4,10 +4,12 @@ import { getCountryConfig } from '../utils/countryConfig';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import AdminPasswordModal from './AdminPasswordModal';
 import { printReceipt, downloadReceiptFile } from '../utils/receiptGenerator';
+import { playSound, isSoundEnabled, setSoundEnabled } from '../utils/soundEffects';
+import { formatShiftWhatsAppMessage, getWhatsAppShareUrl } from '../utils/shiftExport';
 import { 
   Search, Plus, Minus, Trash2, CheckCircle, CheckCircle2, Printer, Download, XCircle, ShoppingBag, ShoppingCart, ShoppingBasket,
   CreditCard, DollarSign, QrCode, X, RefreshCw, Sparkles, Grid, LayoutGrid,
-  List, Layers, SlidersHorizontal, Barcode, Volume2, Utensils, UtensilsCrossed,
+  List, Layers, SlidersHorizontal, Barcode, Volume2, VolumeX, Wifi, WifiOff, MessageCircle, Copy, Share2, Utensils, UtensilsCrossed,
   ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package
 } from 'lucide-react';
 const getProductImage = (prod) => {
@@ -30,7 +32,10 @@ const getProductImage = (prod) => {
 };
 
 export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
-  const { user, inventory, processSale, cancelSale, companySettings, countryConfig, companyName, activeBranch, formatCurrency, loadSharedCart, syncExchangeRate, loading, addTable, removeTableItemsByParticipant, clearTable, activeShift, openShift, addShiftMovement, closeShiftBlind } = usePuntoNexus();
+  const { user, inventory, processSale, cancelSale, companySettings, countryConfig, companyName, activeBranch, formatCurrency, loadSharedCart, syncExchangeRate, loading, addTable, removeTableItemsByParticipant, clearTable, activeShift, openShift, addShiftMovement, closeShiftBlind, isOnline, pendingOfflineCount, syncPendingSales, sales } = usePuntoNexus();
+
+  const [soundActive, setSoundActive] = useState(() => isSoundEnabled());
+  const [shiftWhatsAppModal, setShiftWhatsAppModal] = useState(null);
 
   const activeCountryConfig = useMemo(() => {
     return countryConfig || getCountryConfig(companySettings?.country || 'CL');
@@ -205,6 +210,16 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
       alert(res.error);
     } else {
       setShowBlindCloseModal(false);
+      const closedShift = res.shift || activeShift;
+      const shiftSalesList = (sales || []).filter(s => s.shift_id === closedShift?.id || !s.shift_id);
+      const msg = formatShiftWhatsAppMessage({
+        shift: closedShift,
+        shiftSales: shiftSalesList,
+        companySettings,
+        companyName,
+        activeBranch
+      });
+
       setCloseCashUSD('');
       setCloseCashVES('');
       setCloseCardVES('');
@@ -212,7 +227,13 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
       setCloseZelleUSD('');
       setCloseBinanceUSDT('');
       setCloseNotes('');
-      alert("🔒 Cierre ciego de turno enviado con éxito. La caja ha sido cerrada y los datos enviados a auditoría del administrador.");
+
+      setShiftWhatsAppModal({
+        isOpen: true,
+        shift: closedShift,
+        messageText: msg,
+        copied: false
+      });
     }
   };
 
@@ -503,6 +524,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     }
 
     setLastScannedItem(product);
+    playSound('scan');
     // ⬇ NO abrir la canasta automáticamente — el usuario decide cuando verla
     setAddedProdId(targetKey);
     setTimeout(() => setAddedProdId(null), 600);
@@ -522,6 +544,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     if (newQty <= 0) {
       const newCart = cart.filter(i => getProdKey(i.part) !== targetKey);
       setCart(newCart);
+      playSound('delete');
       if (newCart.length === 0) {
         setShowScanModal(false);
       }
@@ -530,10 +553,12 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
 
     const isService = item.part.sku?.startsWith('SERV-') || item.part.stock === 999;
     if (!isService && newQty > item.part.stock) {
+      playSound('error');
       alert(`No hay suficiente stock. Límite: ${item.part.stock} unidades.`);
       return;
     }
 
+    playSound('click');
     setCart(cart.map(i => getProdKey(i.part) === targetKey ? { ...i, cantidad: newQty } : i));
   };
 
@@ -542,6 +567,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     const targetKey = typeof targetProd === 'string' ? targetProd : getProdKey(targetProd);
     const newCart = cart.filter(item => getProdKey(item.part) !== targetKey);
     setCart(newCart);
+    playSound('delete');
     if (newCart.length === 0) {
       setShowScanModal(false);
     }
@@ -756,6 +782,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
           speakTotal(newTotal);
         }
       } else {
+        playSound('error');
         alert(`No se encontró coincidencia para: "${query}"`);
         setSearchQuery('');
       }
@@ -1031,8 +1058,10 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     setProcessing(false);
 
     if (res && res.error) {
+      playSound('error');
       alert(`Error al procesar la venta: ${res.error}`);
     } else {
+      playSound('payment');
       setLastSaleTotal(cartTotal);
       setSuccess(true);
       if (res && res.sale) {
@@ -1535,6 +1564,63 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
               <List size={15} />
             </button>
           </div>
+
+          {/* Botón de Sonido del Escáner */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !soundActive;
+              setSoundActive(next);
+              setSoundEnabled(next);
+              if (next) playSound('scan');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              border: `1px solid ${soundActive ? 'rgba(6, 182, 212, 0.4)' : '#e2e8f0'}`,
+              background: soundActive ? 'rgba(6, 182, 212, 0.1)' : '#f8fafc',
+              color: soundActive ? '#0891b2' : '#94a3b8',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+            title={soundActive ? "🔊 Sonido de Escáner Activado (Click para silenciar)" : "🔇 Sonido Silenciado (Click para activar)"}
+          >
+            {soundActive ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+
+          {/* Indicador de Conectividad y Sincronización Offline */}
+          {(!isOnline || pendingOfflineCount > 0) && (
+            <button
+              type="button"
+              onClick={syncPendingSales}
+              disabled={!isOnline || pendingOfflineCount === 0}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: isOnline && pendingOfflineCount > 0 ? 'pointer' : 'default',
+                background: !isOnline ? '#fee2e2' : '#fef3c7',
+                color: !isOnline ? '#ef4444' : '#d97706',
+                border: `1px solid ${!isOnline ? '#fca5a5' : '#fde68a'}`,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}
+              title={!isOnline ? "Sin conexión a internet. Las ventas se guardan en IndexedDB local." : "Ventas guardadas sin conexión. Click para sincronizar con la nube."}
+            >
+              {!isOnline ? <WifiOff size={14} /> : <Wifi size={14} />}
+              <span>{!isOnline ? 'Offline' : `Sincronizar (${pendingOfflineCount})`}</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -3739,6 +3825,156 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Resumen de Cierre de Turno por WhatsApp */}
+      {shiftWhatsAppModal && shiftWhatsAppModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '16px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '520px',
+            background: '#0f172a',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(16, 185, 129, 0.2)',
+            borderRadius: '24px',
+            padding: '28px',
+            color: '#ffffff'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid #10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10b981'
+                }}>
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: 0 }}>
+                    Turno Cerrado con Éxito
+                  </h3>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                    Arqueo de caja auditado y registrado
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShiftWhatsAppModal(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Vista previa del mensaje */}
+            <div style={{
+              background: '#090d16',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '14px',
+              padding: '16px',
+              maxHeight: '220px',
+              overflowY: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.6',
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              color: '#e2e8f0',
+              marginBottom: '20px'
+            }}>
+              {shiftWhatsAppModal.messageText}
+            </div>
+
+            {/* Botones de acción */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const phone = companySettings.owner_whatsapp_phone || '';
+                  const url = getWhatsAppShareUrl(phone, shiftWhatsAppModal.messageText);
+                  window.open(url, '_blank');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '14px',
+                  borderRadius: '14px',
+                  fontWeight: 900,
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)'
+                }}
+              >
+                <Share2 size={18} />
+                <span>📲 Enviar Reporte por WhatsApp</span>
+              </button>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(shiftWhatsAppModal.messageText);
+                    setShiftWhatsAppModal(prev => ({ ...prev, copied: true }));
+                    setTimeout(() => {
+                      setShiftWhatsAppModal(prev => prev ? ({ ...prev, copied: false }) : null);
+                    }, 2500);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: shiftWhatsAppModal.copied ? '#10b981' : '#ffffff',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {shiftWhatsAppModal.copied ? <Check size={16} /> : <Copy size={16} />}
+                  <span>{shiftWhatsAppModal.copied ? '¡Copiado al Portapapeles!' : 'Copiar Texto'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShiftWhatsAppModal(null)}
+                  className="btn-secondary"
+                  style={{ flex: 1, padding: '12px', borderRadius: '12px' }}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

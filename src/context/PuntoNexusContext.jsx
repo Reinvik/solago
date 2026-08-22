@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { getCountryConfig, COUNTRY_CONFIGS } from '../utils/countryConfig';
+import { saveOfflineSale, getPendingOfflineSales, removePendingOfflineSale, cacheLocalInventory, getCachedLocalInventory } from '../utils/indexedDb';
 
 const PuntoNexusContext = createContext();
 
@@ -263,8 +264,91 @@ export const PuntoNexusProvider = ({ children }) => {
   });
 
   const countryConfig = useMemo(() => {
-    return getCountryConfig(companySettings?.country || 'CL');
+    return getCountryConfig(companySettings?.country || 'VE');
   }, [companySettings?.country]);
+
+  // ─── ESTADO OFFLINE & SINCRONIZACIÓN AUTOMÁTICA DE VENTAS (INDEXEDDB) ───
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+
+  // Función para sincronizar ventas guardadas en IndexedDB con Supabase
+  const syncPendingSales = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { synced: 0, pending: pendingOfflineCount };
+    }
+
+    try {
+      const pendingSales = await getPendingOfflineSales();
+      if (!pendingSales || pendingSales.length === 0) {
+        setPendingOfflineCount(0);
+        return { synced: 0, pending: 0 };
+      }
+
+      let syncedCount = 0;
+      for (const sale of pendingSales) {
+        try {
+          const payloadToInsert = {
+            company_id: sale.company_id || companyId,
+            items: sale.items || [],
+            total_cost: Number(sale.total_cost || 0),
+            total_sell: Number(sale.total_sell || 0),
+            profit: Number(sale.profit || 0),
+            discount: Number(sale.discount || 0),
+            payment_method: sale.payment_method || 'Efectivo',
+            document_type: sale.document_type || 'Boleta',
+            exchange_rate: Number(sale.exchange_rate || 1.0),
+            sold_at: sale.sold_at || new Date().toISOString()
+          };
+
+          const { error: insertErr } = await supabase
+            .from('punto_nexus_sales')
+            .insert([payloadToInsert]);
+
+          if (!insertErr) {
+            await removePendingOfflineSale(sale.id);
+            syncedCount++;
+          }
+        } catch (e) {
+          console.warn('[Sync] Error sincronizando venta offline individual:', e);
+        }
+      }
+
+      const remaining = await getPendingOfflineSales();
+      setPendingOfflineCount(remaining.length);
+
+      if (syncedCount > 0) {
+        console.log(`[IndexedDB Sync] ✅ ${syncedCount} ventas offline sincronizadas con Supabase.`);
+      }
+
+      return { synced: syncedCount, pending: remaining.length };
+    } catch (err) {
+      console.warn('[Sync] Error general de sincronización:', err);
+      return { synced: 0, pending: pendingOfflineCount };
+    }
+  }, [companyId, pendingOfflineCount]);
+
+  // Escuchar cambios de conectividad en vivo
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncPendingSales();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    getPendingOfflineSales().then(sales => {
+      setPendingOfflineCount((sales || []).length);
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [syncPendingSales]);
 
   // ─── GESTIÓN DE TURNOS Y CIERRE CIEGO DE CAJA MULTI-DIVISA ───
   const [shifts, setShifts] = useState(() => {
@@ -2824,10 +2908,10 @@ export const PuntoNexusProvider = ({ children }) => {
           console.warn("Excepción registrando ingreso financiero:", incEx);
         }
 
-        // D. Actualizar estados locales de ventas e inventarios
-        const parsedDbItems = (dbSale && dbSale.items)
-          ? (typeof dbSale.items === 'string' ? JSON.parse(dbSale.items) : dbSale.items)
-          : newSale.items;
+        if (!dbSale) {
+          saveOfflineSale(newSale);
+          setPendingOfflineCount(prev => prev + 1);
+        }
 
         const syncedSale = {
           ...newSale,
@@ -2836,7 +2920,8 @@ export const PuntoNexusProvider = ({ children }) => {
           branch_id: activeBranchId,
           reference_number: referenceNumber,
           cash_details: cashDetails || null,
-          items: parsedDbItems
+          items: parsedDbItems,
+          is_offline_pending: !dbSale
         };
         const updatedBranchSales = [syncedSale, ...activeBranchSales];
         setSales(updatedBranchSales);
@@ -2867,11 +2952,33 @@ export const PuntoNexusProvider = ({ children }) => {
         };
 
         setLoading(false);
-        return { error: null, sale: syncedSale };
+        return { error: null, sale: syncedSale, is_offline: !dbSale };
       } catch (err) {
-        console.error("Error procesando venta en base de datos:", err);
+        console.warn("Fallo de conexión en processSale. Guardando venta localmente en IndexedDB:", err);
+        saveOfflineSale(newSale);
+        setPendingOfflineCount(prev => prev + 1);
+
+        const updatedInv = inventory.map(prod => {
+          const soldItem = cartItems.find(c => {
+            const part = c.part || c;
+            return (part.id && part.id === prod.id) || (part.sku && part.sku === prod.sku) || (part.name && part.name === prod.name);
+          });
+          if (soldItem && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
+            const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
+            return { ...prod, stock: Math.max(0, prod.stock - qty) };
+          }
+          return prod;
+        });
+        setInventory(updatedInv);
+        persistLocalInventory(updatedInv);
+
+        const localOfflineSale = { ...newSale, is_offline_pending: true };
+        const updatedBranchSales = [localOfflineSale, ...activeBranchSales];
+        setSales(updatedBranchSales);
+        persistLocalSales(updatedBranchSales);
+
         setLoading(false);
-        return { error: err.message };
+        return { error: null, sale: localOfflineSale, is_offline: true };
       }
     }
   };
@@ -4048,6 +4155,9 @@ export const PuntoNexusProvider = ({ children }) => {
     openShift,
     addShiftMovement,
     closeShiftBlind,
+    isOnline,
+    pendingOfflineCount,
+    syncPendingSales,
     tables,
     addTable,
     toggleTablePaidStatus,

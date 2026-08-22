@@ -25,8 +25,10 @@ import {
   LayoutDashboard,
   ArrowUpRight,
   ArrowDownRight,
-  TrendingDown
+  TrendingDown,
+  Share2
 } from 'lucide-react';
+import { formatShiftWhatsAppMessage, getWhatsAppShareUrl } from '../utils/shiftExport';
 
 export default function FinanceModule() {
   const { 
@@ -1926,6 +1928,42 @@ export default function FinanceModule() {
                       <strong>📝 Observaciones del Cajero:</strong> "{declared.notes}"
                     </div>
                   )}
+
+                  {/* Botón para Compartir Resumen por WhatsApp */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const msg = formatShiftWhatsAppMessage({
+                          shift,
+                          shiftSales,
+                          companySettings,
+                          companyName: companySettings?.company_name || 'SoLago',
+                          activeBranch: { name: shift.branch_name }
+                        });
+                        const phone = companySettings?.owner_whatsapp_phone || '';
+                        const url = getWhatsAppShareUrl(phone, msg);
+                        window.open(url, '_blank');
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '10px',
+                        fontSize: '12.5px',
+                        fontWeight: 800,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        boxShadow: '0 3px 10px rgba(37, 211, 102, 0.25)'
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span>Enviar Resumen a WhatsApp</span>
+                    </button>
+                  </div>
 
                 </div>
               );

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { supabase } from '../utils/supabaseClient';
-import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare } from 'lucide-react';
 import ExchangeRateChart from './ExchangeRateChart';
+import { isSoundEnabled, setSoundEnabled, playSound } from '../utils/soundEffects';
 
 const GIROS_COMERCIALES = [
   { 
@@ -72,6 +73,7 @@ export default function Settings({ onOpenProfileModal }) {
   // ─── Sincronización manual de sucursales desde Supabase ───
   const [syncingBranches, setSyncingBranches] = useState(false);
   const [branchSyncMsg, setBranchSyncMsg] = useState(null);
+  const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
 
   const handleSyncBranchesFromDB = async () => {
     const companyId = companySettings.company_id || localStorage.getItem('punto_nexus_company_id');
@@ -1104,6 +1106,71 @@ export default function Settings({ onOpenProfileModal }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* PANEL 3.8: PREFERENCIAS DE HARDWARE & AUTOMATIZACIONES POS */}
+        <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Smartphone size={16} />
+            Hardware, Sonido & Automatizaciones de Turno
+          </h3>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Control de Sonido del Escáner */}
+            <div style={{ background: 'rgba(6, 182, 212, 0.04)', border: '1px solid rgba(6, 182, 212, 0.2)', borderRadius: '14px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {soundEnabled ? <Volume2 size={18} style={{ color: '#0891b2' }} /> : <VolumeX size={18} style={{ color: '#94a3b8' }} />}
+                  <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>Sonido del Escáner (Web Audio)</span>
+                </div>
+                <input
+                  type="checkbox"
+                  id="sound-toggle-pref"
+                  checked={soundEnabled}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setSoundEnabledState(next);
+                    setSoundEnabled(next);
+                    if (next) playSound('scan');
+                  }}
+                  style={{ width: '18px', height: '18px', accentColor: '#06b6d4', cursor: 'pointer' }}
+                />
+              </div>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 10px 0', lineHeight: '1.5' }}>
+                Emite un pitido de confirmación instantáneo cada vez que se escanea un código de barras o se agrega un producto al carrito.
+              </p>
+              {soundEnabled && (
+                <button
+                  type="button"
+                  onClick={() => playSound('scan')}
+                  style={{ background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.3)', color: '#0891b2', padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  🔊 Probar Sonido
+                </button>
+              )}
+            </div>
+
+            {/* Teléfono WhatsApp para Cierres de Turno */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <MessageSquare size={18} style={{ color: '#10b981' }} />
+                <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>WhatsApp del Dueño / Auditor</span>
+              </div>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 8px 0', lineHeight: '1.5' }}>
+                Número al que se enviará automáticamente el resumen de arqueo al cerrar turno de caja (con código de país).
+              </p>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Ej: +584121234567 o +56912345678"
+                value={companySettings.owner_whatsapp_phone || ''}
+                onChange={async (e) => {
+                  await updateCompanySettings({ owner_whatsapp_phone: e.target.value });
+                }}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '12.5px' }}
+              />
+            </div>
           </div>
         </div>
 
