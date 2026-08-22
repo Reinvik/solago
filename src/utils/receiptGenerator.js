@@ -8,17 +8,19 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
   const isAnulada = sale?.status === 'Anulada' || sale?.cancelled;
 
   const title = isFactura ? 'FACTURA ELECTRÓNICA' : (sale?.document_type === 'Boleta' ? 'BOLETA ELECTRÓNICA' : 'COMPROBANTE DE VENTA');
-  const folio = sale?.id ? `N° PN-${String(sale.id).slice(-8).toUpperCase()}` : `N° ${Date.now().toString().slice(-6)}`;
+  const folio = sale?.id ? `N° SL-${String(sale.id).slice(-8).toUpperCase()}` : `N° ${Date.now().toString().slice(-6)}`;
   
   const compName = companyName || companySettings.company_name || 'SoLago';
-  const rut = companySettings.rut || companySettings.tax_id || companySettings.rut_empresa || '76.543.210-K';
+  const isVE = companySettings.country === 'VE' || companySettings.currency_code === 'VES' || !companySettings.country;
+  const rut = companySettings.rif || companySettings.tax_id || companySettings.rut || (isVE ? 'J-12345678-0' : '76.543.210-K');
   const address = branchName || companySettings.address || 'Sede Principal';
   const phone = companySettings.phone || '';
 
-  const dateStr = sale?.sold_at ? new Date(sale.sold_at).toLocaleString('es-CL', {
+  const dateLocale = isVE ? 'es-VE' : 'es-CL';
+  const dateStr = sale?.sold_at ? new Date(sale.sold_at).toLocaleString(dateLocale, {
     dateStyle: 'medium',
     timeStyle: 'short'
-  }) : new Date().toLocaleString('es-CL');
+  }) : new Date().toLocaleString(dateLocale);
 
   const items = sale?.items || [];
   const isUSD = sale?.use_usd_pricing ?? (companySettings.use_usd_pricing !== false);
@@ -230,6 +232,23 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
           <span>FORMA DE PAGO:</span>
           <span class="text-bold">${sale?.payment_method || 'Efectivo'}</span>
         </div>
+        ${sale?.split_payments && Array.isArray(sale.split_payments) && sale.split_payments.length > 0 ? `
+          <div style="margin: 4px 0; padding: 4px 0; border-top: 1px dotted #000; border-bottom: 1px dotted #000; font-size: 10px;">
+            <div style="font-weight: bold; margin-bottom: 2px;">-- DESGLOSE DE PAGO MULTIDIVISA --</div>
+            ${sale.split_payments.map(sp => `
+              <div class="meta-row" style="color: #1e293b;">
+                <span>• ${sp.method || sp.label || 'Pago'}:</span>
+                <span class="text-bold">${Number(sp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sp.currency || ''} ${sp.ref_number ? `(#${sp.ref_number})` : ''}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        ${sale?.cash_details?.change_payout_details ? `
+          <div class="meta-row" style="color: #047857; font-size: 10px; margin-top: 2px;">
+            <span>VUELTO ENTREGADO:</span>
+            <span class="text-bold">${sale.cash_details.change_payout_details.method_label || 'Vuelto'}: $${Number(sale.cash_details.change_payout_details.amount_usd || 0).toFixed(2)} USD</span>
+          </div>
+        ` : ''}
         ${(sale?.reference_number || sale?.cash_details?.reference_number) ? `
           <div class="meta-row">
             <span>N° REF / TRANSACCIÓN:</span>

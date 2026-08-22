@@ -136,7 +136,7 @@ export default function Login() {
                   id="email"
                   type="email"
                   className="login-dark-input"
-                  placeholder="usuario@empresa.cl"
+                  placeholder="usuario@solago.com.ve"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

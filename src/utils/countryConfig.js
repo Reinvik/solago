@@ -41,7 +41,7 @@ export const COUNTRY_CONFIGS = {
   }
 };
 
-export const getCountryConfig = (countryCode = 'CL') => {
-  const code = (countryCode || 'CL').toUpperCase();
-  return COUNTRY_CONFIGS[code] || COUNTRY_CONFIGS.CL;
+export const getCountryConfig = (countryCode = 'VE') => {
+  const code = (countryCode || 'VE').toUpperCase();
+  return COUNTRY_CONFIGS[code] || COUNTRY_CONFIGS.VE;
 };
