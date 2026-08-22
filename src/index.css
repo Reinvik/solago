@@ -77,13 +77,13 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.25);
   border-radius: 99px;
   transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(6, 182, 212, 0.5);
 }
 
 /* Paneles Estilo Nexus Gestión (Glassmorphic) */
@@ -150,6 +150,30 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 10005;
   color: #94a3b8;
   box-shadow: 10px 0 40px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 210, 255, 0.25) transparent;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 210, 255, 0.2);
+  border-radius: 99px;
+  border: 1px solid rgba(0, 210, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 210, 255, 0.5);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
 }
 
 .sidebar-logo {
