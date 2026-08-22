@@ -127,11 +127,30 @@ export default function Inventory() {
       "Stock Mínimo Alerta",
       "Tipo de Pago",
       "Proveedor",
-      "Días Expiración"
+      "Días Expiración",
+      "Exento de IVA",
+      "Imagen (URL)"
     ]];
 
-    const worksheet = XLSX.utils.aoa_to_sheet(headers);
-    
+    // Fila de ejemplo para orientar al usuario
+    const exampleRow = [
+      "Coca-Cola 350ml",
+      "BEB-001",
+      "Bebidas",
+      "Un.",
+      100,
+      0.50,
+      1.00,
+      10,
+      "Contado",
+      "Distribuidora Ejemplo",
+      10,
+      "No",
+      "https://ejemplo.com/imagen.jpg"
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers[0], exampleRow]);
+
     // Ajustar ancho de columnas para legibilidad excelente
     worksheet['!cols'] = [
       { wch: 25 }, // Nombre
@@ -144,7 +163,9 @@ export default function Inventory() {
       { wch: 20 }, // Stock Mínimo Alerta
       { wch: 18 }, // Tipo de Pago
       { wch: 22 }, // Proveedor
-      { wch: 16 }  // Días Expiración
+      { wch: 16 }, // Días Expiración
+      { wch: 16 }, // Exento de IVA
+      { wch: 40 }  // Imagen (URL)
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -172,6 +193,9 @@ export default function Inventory() {
           return;
         }
 
+        // Tasa de IVA base del sistema (ej: 0.16 = 16%)
+        const defaultTaxRate = companySettings?.tax_rate ?? 0.16;
+
         let successCount = 0;
         let errorCount = 0;
 
@@ -194,6 +218,20 @@ export default function Inventory() {
           const supplier = String(row["Proveedor"] || row["proveedor"] || '').trim();
           const expirationDays = Number(row["Días Expiración"] || row["dias_expiracion"] || 10);
 
+          // ── NUEVA LÓGICA 1: Exento de IVA ──────────────────────────────
+          // Si la celda dice "Sí" / "Si" / "S" / "YES" / "1" → exento (0%)
+          // Si dice "No", está vacía o cualquier otro valor → IVA normal del sistema
+          const exentoRaw = String(row["Exento de IVA"] || row["exento_iva"] || row["Exento"] || '').trim().toLowerCase();
+          const isExento = ['sí', 'si', 's', 'yes', 'y', '1', 'true', 'exento'].includes(exentoRaw);
+          const taxRate = isExento ? 0 : defaultTaxRate;
+          const taxLabel = isExento ? '(E)' : '';
+
+          // ── NUEVA LÓGICA 2: Imagen URL ──────────────────────────────────
+          // Si viene URL válida (comienza con http/https) → se guarda como image_url
+          // Si está vacía → se deja en blanco (el POS y vitrina asignan imagen por defecto)
+          const imageRaw = String(row["Imagen (URL)"] || row["imagen_url"] || row["Imagen"] || row["image_url"] || '').trim();
+          const imageUrl = (imageRaw.startsWith('http://') || imageRaw.startsWith('https://')) ? imageRaw : '';
+
           const productPayload = {
             name: String(name).trim(),
             unit,
@@ -207,6 +245,11 @@ export default function Inventory() {
             supplier,
             expiration_days: expirationDays,
             is_paid: paymentType === 'contado',
+            // Campos nuevos:
+            tax_rate: taxRate,
+            tax_label: taxLabel,
+            is_tax_exempt: isExento,
+            image_url: imageUrl,
             updated_at: new Date().toISOString()
           };
 

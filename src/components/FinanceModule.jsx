@@ -42,6 +42,7 @@ export default function FinanceModule() {
     updateExpense, 
     deleteExpense,
     activeBranch,
+    branches = [],
     shifts = []
   } = usePuntoNexus();
 
@@ -1816,6 +1817,9 @@ export default function FinanceModule() {
                         </span>
                         <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 10px', borderRadius: '99px', fontWeight: 700, border: '1px solid #e2e8f0' }}>
                           👤 Cajero: {shift.user_name}
+                        </span>
+                        <span style={{ fontSize: '11px', background: '#eff6ff', color: '#1d4ed8', padding: '3px 10px', borderRadius: '99px', fontWeight: 700, border: '1px solid #bfdbfe' }}>
+                          🏪 Sucursal: {shift.branch_name || branches?.find(b => b.id === shift.branch_id)?.name || 'Matriz'}
                         </span>
                       </div>
                       <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px' }}>

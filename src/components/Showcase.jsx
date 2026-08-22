@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   Copy,
   Printer,
-  Grid
+  Grid,
+  Trash2
 } from 'lucide-react';
 
 export default function Showcase({ isPublicView = false }) {
@@ -890,21 +891,98 @@ export default function Showcase({ isPublicView = false }) {
             <div style={{ marginBottom: '16px' }}>
               <label className="form-label" style={{ marginBottom: '8px' }}>Resumen de Consumo</label>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                {basket.map((item, idx) => (
-                  <div key={item.part?.id || item.part?.sku || `basket-item-${idx}`} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>{item.part.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        <DualCurrencyDisplay amount={item.part.sell_price} fontSize="11px" primaryColor="var(--text-muted)" showSwap={false} /> c/u
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                {basket.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>
+                    Tu carrito está vacío.
+                  </div>
+                ) : (
+                  basket.map((item, idx) => (
+                    <div key={item.part?.id || item.part?.sku || `basket-item-${idx}`} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.part.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <DualCurrencyDisplay amount={item.part.sell_price} fontSize="11px" primaryColor="var(--text-muted)" showSwap={false} /> c/u
+                        </div>
+                      </div>
+
+                      {/* Controles de Cantidad y Eliminar */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => updateBasketQty(item.part, -1)}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                          title="Restar 1"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        
+                        <span style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', minWidth: '20px', textAlign: 'center' }}>
+                          {item.cantidad}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => updateBasketQty(item.part, 1)}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                          title="Sumar 1"
+                        >
+                          <Plus size={12} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => updateBasketQty(item.part, -item.cantidad)}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '6px',
+                            border: '1px solid #fecaca',
+                            background: '#fef2f2',
+                            color: '#ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0,
+                            marginLeft: '2px'
+                          }}
+                          title="Eliminar plato"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+
+                      <div style={{ minWidth: '65px', textAlign: 'right' }}>
+                        <DualCurrencyDisplay amount={item.cantidad * item.part.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 900, color: '#0f172a' }}>{item.cantidad}x</span>
-                      <DualCurrencyDisplay amount={item.cantidad * item.part.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 

@@ -312,6 +312,7 @@ export const PuntoNexusProvider = ({ children }) => {
       id: generateUUID(),
       company_id: companyId,
       branch_id: bId,
+      branch_name: activeBranch?.name || 'Matriz Principal',
       user_id: user?.id || 'cashier-local',
       user_name: user?.full_name || user?.email || 'Cajero Atendiendo',
       opened_at: new Date().toISOString(),
