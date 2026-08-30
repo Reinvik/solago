@@ -27,17 +27,7 @@
       "has": [
         {
           "type": "host",
-          "value": "(?:www\\.)?solago\\.com\\.ve"
-        }
-      ],
-      "destination": "/landing.html"
-    },
-    {
-      "source": "/((?!api/|assets/|images/|products/|favicon|.*\\..*).*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "(?:www\\.)?solago\\.com\\.ve"
+          "value": "solago.com.ve"
         }
       ],
       "destination": "/landing.html"
@@ -47,17 +37,47 @@
       "has": [
         {
           "type": "host",
-          "value": "app\\.solago\\.com\\.ve"
+          "value": "www.solago.com.ve"
+        }
+      ],
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/((?!api/|assets/|images/|products/|.*\\..*).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "solago.com.ve"
+        }
+      ],
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/((?!api/|assets/|images/|products/|.*\\..*).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.solago.com.ve"
+        }
+      ],
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.solago.com.ve"
         }
       ],
       "destination": "/index.html"
     },
     {
-      "source": "/((?!api/|assets/|images/|products/|favicon|.*\\..*).*)",
+      "source": "/((?!api/|assets/|images/|products/|.*\\..*).*)",
       "has": [
         {
           "type": "host",
-          "value": "app\\.solago\\.com\\.ve"
+          "value": "app.solago.com.ve"
         }
       ],
       "destination": "/index.html"
