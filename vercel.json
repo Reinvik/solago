@@ -4,5 +4,35 @@
       "path": "/api/exchange-rates?force=true",
       "schedule": "30 21 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/web",
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/landing",
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/((?!api/|assets/|favicon|logo|landing|web).*)/?",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?:www\\.)?solago\\.com\\.ve"
+        }
+      ],
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/((?!api/|assets/|favicon|logo|landing|web).*)/?",
+      "has": [
+        {
+          "type": "host",
+          "value": "app\\.solago\\.com\\.ve"
+        }
+      ],
+      "destination": "/index.html"
+    }
   ]
 }

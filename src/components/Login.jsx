@@ -26,21 +26,15 @@ export default function Login() {
     <div className="login-split-container">
       {/* Panel Izquierdo: Ventajas Explicativas (Hero) */}
       <div className="login-left-hero">
-        <div className="login-hero-header" style={{ gap: '16px' }}>
-          <div className="login-hero-logo" style={{ width: '64px', height: '64px', background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
-            <img src="/logo.png" alt="SoLago" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <div className="login-hero-header" style={{ gap: '14px', display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+          <div className="login-hero-logo" style={{ width: '56px', height: '56px', background: 'transparent', border: 'none', boxShadow: 'none', padding: 0, flexShrink: 0 }}>
+            <img src="/solago-emblem.png" alt="SoLago" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
-          <span className="login-hero-brand" style={{ 
-            fontFamily: "'Outfit', sans-serif", 
-            fontSize: '34px', 
-            fontWeight: '900', 
-            letterSpacing: '-0.05em', 
-            display: 'inline-flex',
-            textShadow: '1px 2px 3px rgba(0, 0, 0, 0.4)'
-          }}>
-            <span style={{ color: '#ffa100' }}>So</span>
-            <span style={{ color: '#2563eb' }}>Lago</span>
-          </span>
+          <img 
+            src="/solago-wordmark.png" 
+            alt="SoLago - Software Online para Locales" 
+            style={{ height: '46px', maxWidth: '210px', objectFit: 'contain', display: 'block' }} 
+          />
         </div>
 
         <div className="login-hero-content">
@@ -175,6 +169,26 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
+            <a
+              href={typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/landing.html' : 'https://www.solago.com.ve'}
+              style={{
+                color: '#94a3b8',
+                fontSize: '13px',
+                textDecoration: 'none',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.color = '#38bdf8')}
+              onMouseOut={(e) => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              <span>←</span> Conoce más sobre SoLago en <strong>solago.com.ve</strong>
+            </a>
+          </div>
         </div>
       </div>
     </div>
