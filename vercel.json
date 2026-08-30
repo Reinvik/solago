@@ -15,7 +15,15 @@
       "destination": "/landing.html"
     },
     {
-      "source": "/((?!api/|assets/|favicon|logo|landing|web).*)/?",
+      "source": "/app",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/",
       "has": [
         {
           "type": "host",
@@ -25,13 +33,37 @@
       "destination": "/landing.html"
     },
     {
-      "source": "/((?!api/|assets/|favicon|logo|landing|web).*)/?",
+      "source": "/((?!api/|assets/|images/|products/|favicon|.*\\..*).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?:www\\.)?solago\\.com\\.ve"
+        }
+      ],
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/",
       "has": [
         {
           "type": "host",
           "value": "app\\.solago\\.com\\.ve"
         }
       ],
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!api/|assets/|images/|products/|favicon|.*\\..*).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "app\\.solago\\.com\\.ve"
+        }
+      ],
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!api/|assets/|images/|products/|favicon|landing|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
