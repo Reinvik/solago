@@ -429,30 +429,39 @@
       margin-top: 32px;
     }
 
-    /* ─── LIVE RATES MONITOR ─── */
+    /* ─── LIVE RATES MONITOR (MODERN HIGH-CONTRAST LIGHT CARD) ─── */
     .live-rates-bar {
-      background: linear-gradient(135deg, rgba(8, 16, 30, 0.9) 0%, rgba(5, 10, 20, 0.95) 100%);
-      border: 1px solid var(--border-highlight);
-      border-radius: var(--radius-lg);
-      padding: 16px 20px;
+      background: #ffffff;
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      border-radius: 18px;
+      padding: 14px 22px;
       margin-top: 36px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
       flex-wrap: wrap;
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
     }
     
     .live-rate-tag {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      color: var(--cyan);
+      font-size: 11.5px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      color: #0284c7;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 999px;
+      padding: 6px 14px;
       text-transform: uppercase;
+    }
+
+    .live-rate-tag .pill-dot {
+      background: #0284c7;
+      box-shadow: 0 0 10px #00d2ff;
     }
     
     .live-rates-grid {
@@ -463,10 +472,10 @@
     }
     
     .rate-card-mini {
-      background: rgba(3, 7, 14, 0.85);
-      border: 1px solid var(--border-subtle);
-      padding: 7px 14px;
-      border-radius: var(--radius-sm);
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      padding: 8px 14px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -474,22 +483,51 @@
     }
     
     .rate-card-mini:hover {
-      border-color: var(--cyan);
-      background: rgba(5, 12, 24, 1);
+      border-color: #0099cc;
+      background: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0, 153, 204, 0.15);
     }
     
     .rate-label {
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 700;
-      letter-spacing: 0.02em;
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 750;
+      letter-spacing: 0.01em;
     }
     
     .rate-val {
-      font-size: 14.5px;
-      font-weight: 800;
-      color: #ffffff;
+      font-size: 15px;
+      font-weight: 900;
+      color: #0f172a;
       font-family: var(--font-mono);
+    }
+
+    .rate-card-mini.primary-rate .rate-val {
+      color: #0099cc;
+    }
+
+    .rate-refresh-btn {
+      background: #0f172a !important;
+      color: #ffffff !important;
+      border: 1px solid #1e293b !important;
+      border-radius: 10px !important;
+      padding: 8px 14px !important;
+      font-size: 12px !important;
+      font-weight: 800 !important;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .rate-refresh-btn:hover {
+      background: #0099cc !important;
+      border-color: #0099cc !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0, 153, 204, 0.35);
     }
 
     /* ─── PAIN POINT SPOTLIGHT ─── */
@@ -1962,20 +2000,20 @@
             <span>Tasas en Vivo (API Oficial)</span>
           </div>
           <div class="live-rates-grid">
-            <div class="rate-card-mini">
+            <div class="rate-card-mini primary-rate">
               <div class="rate-label">Dólar BCV Oficial</div>
-              <div class="rate-val" id="heroBcvVal">Bs. 791.67</div>
+              <div class="rate-val" id="heroBcvVal">Bs. 794.99</div>
             </div>
             <div class="rate-card-mini">
               <div class="rate-label">Euro Oficial</div>
-              <div class="rate-val" id="heroEuroVal">Bs. 921.88</div>
+              <div class="rate-val" id="heroEuroVal">Bs. 922.69</div>
             </div>
             <div class="rate-card-mini">
               <div class="rate-label">Dólar Paralelo (P2P)</div>
-              <div class="rate-val" id="heroParaleloVal">Bs. 922.97</div>
+              <div class="rate-val" id="heroParaleloVal">Bs. 935.20</div>
             </div>
-            <button class="btn" onclick="fetchLiveRates(true)" style="padding:7px 12px;font-size:11.5px;border-radius:8px;" title="Actualizar tasas en tiempo real">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <button class="rate-refresh-btn" onclick="fetchLiveRates(true)" title="Actualizar tasas en tiempo real">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
               <span>Refrescar</span>
             </button>
           </div>
