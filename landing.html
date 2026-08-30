@@ -2,6 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
+  <script>
+    (function() {
+      var h = window.location.hostname;
+      if (h === 'app.solago.com.ve') {
+        window.location.replace('/' + window.location.search + window.location.hash);
+      }
+    })();
+  </script>
   <meta content="width=device-width,initial-scale=1" name="viewport"/>
   <link rel="icon" type="image/png" href="/logo.png" />
   <title>SoLago | Punto de Venta en la Nube, Inventario y Gestión Multimoneda</title>
