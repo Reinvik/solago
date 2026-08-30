@@ -1367,10 +1367,348 @@
       color: #fff;
     }
 
+    /* ─── CINEMATIC POS DEMO LOOP ─── */
+    .pos-loop-section {
+      margin-top: 36px;
+      position: relative;
+    }
+    
+    .pos-loop-shell {
+      background: linear-gradient(160deg, rgba(10, 20, 38, 0.95) 0%, rgba(4, 9, 18, 0.98) 100%);
+      border: 1.5px solid var(--border-highlight);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 210, 255, 0.08);
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .pos-loop-topbar {
+      background: rgba(6, 12, 24, 0.96);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    
+    .pos-loop-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #cbd5e1;
+      text-transform: uppercase;
+    }
+    
+    .pos-loop-steps-nav {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 4px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+    }
+    
+    .loop-step-btn {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .loop-step-btn.active {
+      background: rgba(0, 210, 255, 0.15);
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(0, 210, 255, 0.25);
+    }
+    
+    .pos-loop-body {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      min-height: 440px;
+      position: relative;
+    }
+    
+    /* Pane Izquierdo: Menú Táctil */
+    .pos-loop-grid-pane {
+      padding: 22px;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    
+    .pos-loop-cat-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    
+    .pos-loop-cat-tab {
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+    }
+    
+    .pos-loop-cat-tab.active {
+      background: var(--cyan);
+      color: #040810;
+      border-color: var(--cyan);
+    }
+    
+    .pos-loop-cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .loop-mini-card {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 2px solid transparent;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    
+    .loop-mini-card.touch-active {
+      border-color: var(--cyan);
+      transform: scale(0.96);
+      box-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+    }
+    
+    .loop-mini-img-wrap {
+      height: 105px;
+      position: relative;
+      background: #f1f5f9;
+      overflow: hidden;
+    }
+    
+    .loop-mini-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .loop-mini-body {
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    
+    .loop-mini-title {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0 0 2px;
+      line-height: 1.25;
+    }
+    
+    .loop-mini-price-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+    
+    .loop-mini-price {
+      font-size: 13.5px;
+      font-weight: 900;
+      color: #0099cc;
+      font-family: var(--font-mono);
+    }
+    
+    .loop-mini-btn {
+      background: #0099cc;
+      color: #fff;
+      font-size: 9.5px;
+      font-weight: 900;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: none;
+    }
+    
+    /* Virtual Cursor */
+    .pos-virtual-cursor {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      pointer-events: none;
+      z-index: 100;
+      top: 50px;
+      left: 50px;
+      transition: all 0.55s cubic-bezier(0.25, 1, 0.5, 1);
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
+    }
+    
+    .cursor-pointer-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-15deg);
+    }
+    
+    .cursor-ripple {
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(0, 210, 255, 0.45);
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    
+    .cursor-ripple.animate {
+      animation: rippleAnim 0.5s ease-out;
+    }
+    
+    @keyframes rippleAnim {
+      0% { opacity: 1; transform: scale(0.3); }
+      100% { opacity: 0; transform: scale(1.6); }
+    }
+    
+    /* Pane Derecho: Carrito, Conversión y Vuelto */
+    .pos-loop-cart-pane {
+      padding: 20px;
+      background: #040810;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    
+    .loop-cart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+      margin-bottom: 12px;
+    }
+    
+    .loop-cart-items {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 80px;
+    }
+    
+    .loop-cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      font-size: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      animation: itemSlideIn 0.3s ease-out;
+    }
+    
+    @keyframes itemSlideIn {
+      from { opacity: 0; transform: translateX(10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .loop-cart-calc-box {
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+    }
+    
+    .loop-calc-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      margin-bottom: 5px;
+    }
+    
+    .loop-change-alert {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1.5px solid rgba(16, 185, 129, 0.4);
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      animation: pulseGreen 1.5s infinite alternate;
+    }
+    
+    @keyframes pulseGreen {
+      0% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); }
+      100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+    }
+    
+    /* Ticket Impreso Deslizante */
+    .loop-receipt-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(3, 6, 14, 0.88);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 50;
+    }
+    
+    .loop-receipt-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .loop-printed-ticket {
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 12px;
+      padding: 18px 20px;
+      width: 100%;
+      max-width: 320px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+      transform: translateY(-20px);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .loop-receipt-overlay.active .loop-printed-ticket {
+      transform: translateY(0);
+    }
+
     /* ─── RESPONSIVE BREAKPOINTS ─── */
     @media(max-width: 1040px) {
       .navlinks-center { display: none; }
       .menu-toggle { display: inline-flex; }
+      .pos-loop-body { grid-template-columns: 1fr; }
       .proof { grid-template-columns: 1fr 1fr; }
       .industry, .pos-sim-grid, .split-comparison, .objections-box { grid-template-columns: 1fr; }
       .catalog-showcase { grid-template-columns: 1fr 1fr; }
@@ -1532,6 +1870,167 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
               <span>Refrescar</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Terminal POS: Loop Cinemático Interactivo -->
+        <div class="pos-loop-section" id="demo-loop">
+          <div class="pos-loop-shell">
+            <!-- Barra Superior del Terminal -->
+            <div class="pos-loop-topbar">
+              <div class="pos-loop-status">
+                <span class="pill-dot"></span>
+                <span>SOLAGO POS • DEMO CINEMÁTICA EN VIVO</span>
+              </div>
+
+              <!-- Pasos Interactivos -->
+              <div class="pos-loop-steps-nav">
+                <button class="loop-step-btn active" id="stepBtn0" onclick="setLoopStep(0)">
+                  <span>1. Marcar ($18)</span>
+                </button>
+                <button class="loop-step-btn" id="stepBtn1" onclick="setLoopStep(1)">
+                  <span>2. Tasa BCV</span>
+                </button>
+                <button class="loop-step-btn" id="stepBtn2" onclick="setLoopStep(2)">
+                  <span>3. Paga $20 & Vuelto $2</span>
+                </button>
+                <button class="loop-step-btn" id="stepBtn3" onclick="setLoopStep(3)">
+                  <span>4. Ticket Impreso</span>
+                </button>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:8px">
+                <button class="btn" onclick="toggleLoopPlay()" id="loopPlayPauseBtn" style="padding:4px 10px;font-size:11px;border-radius:6px">
+                  <span id="loopPlayIcon">⏸ Pausar</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Cuerpo del Terminal -->
+            <div class="pos-loop-body" id="posLoopBody">
+              <!-- Cursor Virtual Animado -->
+              <div class="pos-virtual-cursor" id="virtualCursor">
+                <svg class="cursor-pointer-svg" viewBox="0 0 24 24" fill="none">
+                  <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" fill="#00d2ff" stroke="#ffffff" stroke-width="1.5"/>
+                </svg>
+                <div class="cursor-ripple" id="cursorRipple"></div>
+              </div>
+
+              <!-- Panel Izquierdo: Menú Táctil de Productos -->
+              <div class="pos-loop-grid-pane">
+                <div class="pos-loop-cat-tabs">
+                  <span class="pos-loop-cat-tab active">Hamburguesas & Combos</span>
+                  <span class="pos-loop-cat-tab">Perros y Pepitos</span>
+                  <span class="pos-loop-cat-tab">Bebidas</span>
+                </div>
+
+                <div class="pos-loop-cards-grid">
+                  <!-- Producto A: Combo Nexus -->
+                  <div class="loop-mini-card" id="loopCard0">
+                    <div class="loop-mini-img-wrap">
+                      <img class="loop-mini-img" src="/images/combo_nexus.jpg" alt="Combo Nexus Doble" />
+                    </div>
+                    <div class="loop-mini-body">
+                      <div class="loop-mini-title">Combo Nexus Doble + Papas</div>
+                      <div class="loop-mini-price-row">
+                        <span class="loop-mini-price">$9.50</span>
+                        <button class="loop-mini-btn" id="loopBtnAdd0">+ AGREGAR</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Producto B: Pepito Mixto -->
+                  <div class="loop-mini-card" id="loopCard1">
+                    <div class="loop-mini-img-wrap">
+                      <img class="loop-mini-img" src="/images/pepito_mixto.jpg" alt="Pepito Mixto" />
+                    </div>
+                    <div class="loop-mini-body">
+                      <div class="loop-mini-title">Pepito Mixto Gourmet (Carne/Pollo)</div>
+                      <div class="loop-mini-price-row">
+                        <span class="loop-mini-price">$8.50</span>
+                        <button class="loop-mini-btn" id="loopBtnAdd1">+ AGREGAR</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel Derecho: Carrito, Cálculo BCV y Vuelto de $2 USD -->
+              <div class="pos-loop-cart-pane">
+                <div class="loop-cart-header">
+                  <div>
+                    <b style="font-size:12.5px;color:#fff;display:block">ORDEN ACTUAL • MESA 4</b>
+                    <span style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono)">TICKET #0482 • CAJA 1</span>
+                  </div>
+                  <span class="pill-badge" id="loopTasaBadge" style="padding:2px 7px;font-size:9.5px">BCV: Bs. 791.67</span>
+                </div>
+
+                <div class="loop-cart-items" id="loopCartItems">
+                  <!-- Items añadidos en vivo -->
+                </div>
+
+                <div class="loop-cart-calc-box">
+                  <div class="loop-calc-row">
+                    <span style="color:var(--text-muted)">Subtotal Divisas:</span>
+                    <b style="color:#fff;font-family:var(--font-mono)" id="loopSubtotalUSD">$ 0.00</b>
+                  </div>
+                  <div class="loop-calc-row">
+                    <span style="color:var(--text-muted)">Total en Bolívares (BCV):</span>
+                    <b style="color:var(--cyan);font-family:var(--font-mono);font-size:14px" id="loopTotalVES">Bs. 0.00</b>
+                  </div>
+                  <div class="loop-calc-row" id="loopCashRow" style="display:none">
+                    <span style="color:var(--text-muted)">Cliente entrega Efectivo:</span>
+                    <b style="color:var(--amber);font-family:var(--font-mono)" id="loopCashGiven">$ 20.00 USD</b>
+                  </div>
+
+                  <!-- Alerta de Vuelto Exacto de $2 USD -->
+                  <div class="loop-change-alert" id="loopChangeBox" style="display:none">
+                    <div>
+                      <span style="font-size:10px;color:var(--emerald);font-weight:800;text-transform:uppercase;display:block">
+                        Vuelto Exacto a entregar al cliente:
+                      </span>
+                      <b style="font-size:15px;color:#fff;font-family:var(--font-mono)" id="loopChangeVal">
+                        $ 2.00 USD <span style="font-size:11px;color:var(--text-muted)">(o Bs. 1,583.34)</span>
+                      </b>
+                    </div>
+                    <span style="font-size:20px">💵</span>
+                  </div>
+                </div>
+
+                <!-- Overlay de Ticket Térmico Impreso -->
+                <div class="loop-receipt-overlay" id="loopReceiptOverlay">
+                  <div class="loop-printed-ticket">
+                    <div style="text-align:center;border-bottom:1px dashed #cbd5e1;padding-bottom:8px;margin-bottom:8px">
+                      <b style="font-size:12px;color:#0f172a;display:block">SOLAGO CLOUD POS</b>
+                      <span style="font-size:9.5px;color:#64748b">COMPROBANTE DE VENTA #0482</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                      <span>1x Combo Nexus Doble</span>
+                      <b>$ 9.50</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                      <span>1x Pepito Mixto Gourmet</span>
+                      <b>$ 8.50</b>
+                    </div>
+                    <div style="border-top:1px dashed #cbd5e1;padding-top:6px;display:flex;justify-content:space-between;margin-bottom:3px">
+                      <span>TOTAL CUENTA:</span>
+                      <b>$ 18.00 (Bs. 14,250.06)</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:3px;color:#0284c7">
+                      <span>PAGADO EFECTIVO:</span>
+                      <b>$ 20.00</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;color:#16a34a;font-weight:bold;margin-bottom:8px">
+                      <span>VUELTO ENTREGADO:</span>
+                      <b>$ 2.00 USD</b>
+                    </div>
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:6px;text-align:center;font-size:10px;color:#15803d;font-weight:bold">
+                      ✅ CAJA CUADRADA • STOCK DESCONTADO
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2593,8 +3092,180 @@
       }
     })();
 
-    // Inicializar carga de tasas en tiempo real al abrir
+    // ─── CONTROLADOR DEL LOOP CINEMÁTICO POS ───
+    const posLoopState = {
+      currentStep: 0,
+      isPlaying: true,
+      intervalId: null
+    };
+
+    function triggerRipple(cursorX, cursorY) {
+      const cursor = document.getElementById('virtualCursor');
+      const ripple = document.getElementById('cursorRipple');
+      if (cursor && ripple) {
+        cursor.style.left = cursorX + 'px';
+        cursor.style.top = cursorY + 'px';
+        ripple.classList.remove('animate');
+        void ripple.offsetWidth;
+        ripple.classList.add('animate');
+      }
+    }
+
+    function renderLoopStep(step) {
+      posLoopState.currentStep = step;
+
+      document.querySelectorAll('.loop-step-btn').forEach((btn, idx) => {
+        btn.classList.toggle('active', idx === step);
+      });
+
+      const cartItemsEl = document.getElementById('loopCartItems');
+      const subtotalUSDEl = document.getElementById('loopSubtotalUSD');
+      const totalVESEl = document.getElementById('loopTotalVES');
+      const cashRowEl = document.getElementById('loopCashRow');
+      const changeBoxEl = document.getElementById('loopChangeBox');
+      const receiptOverlay = document.getElementById('loopReceiptOverlay');
+      const card0 = document.getElementById('loopCard0');
+      const card1 = document.getElementById('loopCard1');
+      const bcvRate = rates.bcv || 791.67;
+
+      if (step === 0) {
+        // PASO 1: Marcar combos
+        if (receiptOverlay) receiptOverlay.classList.remove('active');
+        if (cashRowEl) cashRowEl.style.display = 'none';
+        if (changeBoxEl) changeBoxEl.style.display = 'none';
+        if (cartItemsEl) cartItemsEl.innerHTML = '';
+        if (subtotalUSDEl) subtotalUSDEl.textContent = '$ 0.00';
+        if (totalVESEl) totalVESEl.textContent = 'Bs. 0.00';
+
+        setTimeout(() => {
+          triggerRipple(90, 140);
+          if (card0) {
+            card0.classList.add('touch-active');
+            setTimeout(() => card0.classList.remove('touch-active'), 250);
+          }
+          if (cartItemsEl) {
+            cartItemsEl.innerHTML = `
+              <div class="loop-cart-item">
+                <span>1x Combo Nexus Doble</span>
+                <b style="color:var(--cyan);font-family:var(--font-mono)">$ 9.50</b>
+              </div>
+            `;
+          }
+          if (subtotalUSDEl) subtotalUSDEl.textContent = '$ 9.50';
+        }, 400);
+
+        setTimeout(() => {
+          triggerRipple(240, 140);
+          if (card1) {
+            card1.classList.add('touch-active');
+            setTimeout(() => card1.classList.remove('touch-active'), 250);
+          }
+          if (cartItemsEl) {
+            cartItemsEl.innerHTML = `
+              <div class="loop-cart-item">
+                <span>1x Combo Nexus Doble</span>
+                <b style="color:var(--cyan);font-family:var(--font-mono)">$ 9.50</b>
+              </div>
+              <div class="loop-cart-item">
+                <span>1x Pepito Mixto Gourmet</span>
+                <b style="color:var(--cyan);font-family:var(--font-mono)">$ 8.50</b>
+              </div>
+            `;
+          }
+          if (subtotalUSDEl) subtotalUSDEl.textContent = '$ 18.00';
+        }, 1200);
+
+      } else if (step === 1) {
+        // PASO 2: Conversión BCV en tiempo real
+        if (receiptOverlay) receiptOverlay.classList.remove('active');
+        if (cashRowEl) cashRowEl.style.display = 'none';
+        if (changeBoxEl) changeBoxEl.style.display = 'none';
+
+        if (cartItemsEl) {
+          cartItemsEl.innerHTML = `
+            <div class="loop-cart-item">
+              <span>1x Combo Nexus Doble</span>
+              <b style="color:var(--cyan);font-family:var(--font-mono)">$ 9.50</b>
+            </div>
+            <div class="loop-cart-item">
+              <span>1x Pepito Mixto Gourmet</span>
+              <b style="color:var(--cyan);font-family:var(--font-mono)">$ 8.50</b>
+            </div>
+          `;
+        }
+        if (subtotalUSDEl) subtotalUSDEl.textContent = '$ 18.00';
+
+        const totalVES = 18.00 * bcvRate;
+        if (totalVESEl) {
+          totalVESEl.textContent = 'Bs. ' + totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        triggerRipple(400, 70);
+
+      } else if (step === 2) {
+        // PASO 3: Cobro de $20 USD y Vuelto de $2 USD
+        if (receiptOverlay) receiptOverlay.classList.remove('active');
+        if (cartItemsEl) {
+          cartItemsEl.innerHTML = `
+            <div class="loop-cart-item">
+              <span>1x Combo Nexus Doble</span>
+              <b style="color:var(--cyan);font-family:var(--font-mono)">$ 9.50</b>
+            </div>
+            <div class="loop-cart-item">
+              <span>1x Pepito Mixto Gourmet</span>
+              <b style="color:var(--cyan);font-family:var(--font-mono)">$ 8.50</b>
+            </div>
+          `;
+        }
+        if (subtotalUSDEl) subtotalUSDEl.textContent = '$ 18.00';
+        const totalVES = 18.00 * bcvRate;
+        if (totalVESEl) {
+          totalVESEl.textContent = 'Bs. ' + totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        if (cashRowEl) cashRowEl.style.display = 'flex';
+        if (changeBoxEl) changeBoxEl.style.display = 'flex';
+
+        const changeVES = 2.00 * bcvRate;
+        const changeValEl = document.getElementById('loopChangeVal');
+        if (changeValEl) {
+          changeValEl.innerHTML = `$ 2.00 USD <span style="font-size:11px;color:var(--text-muted);font-weight:600">(o Bs. ${changeVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>`;
+        }
+        triggerRipple(380, 260);
+
+      } else if (step === 3) {
+        // PASO 4: Ticket Impreso
+        if (receiptOverlay) receiptOverlay.classList.add('active');
+        triggerRipple(420, 160);
+      }
+    }
+
+    function nextLoopStep() {
+      if (!posLoopState.isPlaying) return;
+      const next = (posLoopState.currentStep + 1) % 4;
+      renderLoopStep(next);
+    }
+
+    function setLoopStep(step) {
+      renderLoopStep(step);
+    }
+
+    function toggleLoopPlay() {
+      posLoopState.isPlaying = !posLoopState.isPlaying;
+      const icon = document.getElementById('loopPlayIcon');
+      if (icon) {
+        icon.textContent = posLoopState.isPlaying ? '⏸ Pausar' : '▶ Reproducir';
+      }
+    }
+
+    function startPosLoop() {
+      renderLoopStep(0);
+      if (posLoopState.intervalId) clearInterval(posLoopState.intervalId);
+      posLoopState.intervalId = setInterval(nextLoopStep, 3400);
+    }
+
+    // Inicializar carga de tasas y loop en tiempo real al abrir
     fetchLiveRates();
+    startPosLoop();
   </script>
 </body>
 </html>
