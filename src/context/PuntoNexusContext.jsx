@@ -245,8 +245,14 @@ export const PuntoNexusProvider = ({ children }) => {
   const [companySettings, setCompanySettings] = useState(() => {
     const saved = localStorage.getItem(`punto_nexus_company_settings_${companyId || 'default'}`);
     const parsed = saved ? JSON.parse(saved) : {};
-    const defaultCountryCode = parsed.country || (parsed.currency_code === 'VES' ? 'VE' : 'CL');
+    const defaultCountryCode = parsed.country || (parsed.currency_code === 'VES' ? 'VE' : 'VE');
     const cConf = getCountryConfig(defaultCountryCode);
+    const cleanParsed = {};
+    Object.keys(parsed).forEach(k => {
+      if (parsed[k] !== null && parsed[k] !== undefined && parsed[k] !== 'null') {
+        cleanParsed[k] = parsed[k];
+      }
+    });
     return {
       country: defaultCountryCode,
       currency_code: cConf.currencyCode,
@@ -254,12 +260,13 @@ export const PuntoNexusProvider = ({ children }) => {
       tax_name: cConf.taxName,
       tax_rate: cConf.defaultTaxRate,
       use_usd_pricing: cConf.useUsdPricingDefault,
-      exchange_rate_source: 'manual',
-      exchange_rate: 1.0,
+      exchange_rate_source: defaultCountryCode === 'VE' ? 'bcv' : 'manual',
+      exchange_rate: defaultCountryCode === 'VE' ? 816.9693 : 1.0,
       logo_url: '/logo.png',
       brand_color: '#0f172a',
       accent_color: '#06b6d4',
-      ...parsed
+      enabled_modules: ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase'],
+      ...cleanParsed
     };
   });
 
@@ -838,15 +845,17 @@ export const PuntoNexusProvider = ({ children }) => {
     // 4. Cargar Ajustes de empresa (Settings) aislados estrictamente por companyId
     const settingsKey = `punto_nexus_company_settings_${companyId}`;
     const savedSettings = localStorage.getItem(settingsKey);
+    const defaultCountryCode = 'VE';
+    const cConf = getCountryConfig(defaultCountryCode);
     const defaultSettings = {
-      country: 'CL',
-      currency_code: 'CLP',
-      currency_symbol: '$',
-      tax_name: 'IVA',
-      tax_rate: 0.19,
-      use_usd_pricing: false,
-      exchange_rate_source: 'manual',
-      exchange_rate: 1.0,
+      country: defaultCountryCode,
+      currency_code: cConf.currencyCode,
+      currency_symbol: cConf.currencySymbol,
+      tax_name: cConf.taxName,
+      tax_rate: cConf.defaultTaxRate,
+      use_usd_pricing: cConf.useUsdPricingDefault,
+      exchange_rate_source: 'bcv',
+      exchange_rate: 816.9693,
       logo_url: '/logo.png',
       brand_color: '#0f172a',
       accent_color: '#06b6d4',
@@ -856,15 +865,55 @@ export const PuntoNexusProvider = ({ children }) => {
     if (savedSettings) {
       try {
         const parsedSettings = JSON.parse(savedSettings);
+        const cleanParsed = {};
+        Object.keys(parsedSettings || {}).forEach(k => {
+          if (parsedSettings[k] !== null && parsedSettings[k] !== undefined && parsedSettings[k] !== 'null') {
+            cleanParsed[k] = parsedSettings[k];
+          }
+        });
         setCompanySettings({
           ...defaultSettings,
-          ...parsedSettings
+          ...cleanParsed
         });
       } catch (e) {
         setCompanySettings(defaultSettings);
       }
     } else {
       setCompanySettings(defaultSettings);
+    }
+
+    // 4b. Cargar Costos Fijos y Egresos aislados para esta empresa
+    const fixedCostsKey = `punto_nexus_fixed_costs_by_branch_${companyId}`;
+    const savedFixedCosts = localStorage.getItem(fixedCostsKey) || localStorage.getItem(`punto_nexus_fixed_costs_${companyId}`);
+    if (savedFixedCosts) {
+      try {
+        const parsedFC = JSON.parse(savedFixedCosts);
+        if (parsedFC && (parsedFC['branch-matriz'] || parsedFC.rent !== undefined)) {
+          setFixedCostsMap(parsedFC['branch-matriz'] ? parsedFC : { 'branch-matriz': parsedFC });
+        } else if (parsedFC) {
+          setFixedCostsMap(parsedFC);
+        } else {
+          setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+        }
+      } catch (e) {
+        setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+      }
+    } else {
+      setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+    }
+
+    const expensesKey = `punto_nexus_expenses_${companyId}`;
+    const savedExpenses = localStorage.getItem(expensesKey);
+    if (savedExpenses) {
+      try {
+        const parsedExp = JSON.parse(savedExpenses);
+        if (Array.isArray(parsedExp)) setExpenses(parsedExp);
+        else setExpenses(GLOBAL_DEFAULT_EXPENSES);
+      } catch (e) {
+        setExpenses(GLOBAL_DEFAULT_EXPENSES);
+      }
+    } else {
+      setExpenses(GLOBAL_DEFAULT_EXPENSES);
     }
 
     // 5. Cargar Inventario y Ventas locales para esta empresa
@@ -1608,10 +1657,39 @@ export const PuntoNexusProvider = ({ children }) => {
                 ? dbSettings.user_modules
                 : (typeof dbSettings.user_modules === 'string' ? JSON.parse(dbSettings.user_modules || '{}') : {});
 
+              const countryCode = dbSettings.country || 'VE';
+              const cConf = getCountryConfig(countryCode);
+
+              const cleanDb = {};
+              Object.keys(dbSettings || {}).forEach(k => {
+                if (dbSettings[k] !== null && dbSettings[k] !== undefined && dbSettings[k] !== 'null') {
+                  cleanDb[k] = dbSettings[k];
+                }
+              });
+
               const finalSettings = {
-                ...dbSettings,
+                country: countryCode,
+                currency_code: cleanDb.currency_code || cConf.currencyCode,
+                currency_symbol: cleanDb.currency_symbol || cConf.currencySymbol,
+                tax_name: cleanDb.tax_name || cConf.taxName,
+                tax_rate: (cleanDb.tax_rate !== null && cleanDb.tax_rate !== undefined) ? Number(cleanDb.tax_rate) : cConf.defaultTaxRate,
+                use_usd_pricing: (cleanDb.use_usd_pricing !== null && cleanDb.use_usd_pricing !== undefined) ? !!cleanDb.use_usd_pricing : cConf.useUsdPricingDefault,
+                exchange_rate: Number(cleanDb.exchange_rate) || (countryCode === 'VE' ? (bcvRate || 816.9693) : 1.0),
+                exchange_rate_source: cleanDb.exchange_rate_source || (countryCode === 'VE' ? 'bcv' : 'manual'),
+                ...cleanDb,
                 ...customMeta
               };
+
+              // Re-asegurar que ningún valor crítico sea null o texto 'null'
+              if (!finalSettings.currency_symbol || finalSettings.currency_symbol === 'null') {
+                finalSettings.currency_symbol = finalSettings.currency_code === 'CLP' ? '$' : 'Bs.';
+              }
+              if (!finalSettings.currency_code || finalSettings.currency_code === 'null') {
+                finalSettings.currency_code = finalSettings.country === 'CL' ? 'CLP' : 'VES';
+              }
+              if (finalSettings.exchange_rate === null || finalSettings.exchange_rate === undefined || Number(finalSettings.exchange_rate) <= 0) {
+                finalSettings.exchange_rate = finalSettings.country === 'CL' ? 1.0 : (bcvRate || 816.9693);
+              }
 
               setCompanySettings(prev => {
                 const merged = { ...prev, ...finalSettings };
@@ -1798,9 +1876,23 @@ export const PuntoNexusProvider = ({ children }) => {
           console.warn("[Nexus Settings] Aviso actualizando ajustes en Supabase:", updateErr.message);
         } else if (!updatedData || updatedData.length === 0) {
           try {
+            const countryCode = newSettings.country || 'VE';
+            const cConf = getCountryConfig(countryCode);
+            const fullInsertPayload = {
+              company_id: companyId,
+              country: countryCode,
+              currency_code: newSettings.currency_code || cConf.currencyCode,
+              currency_symbol: newSettings.currency_symbol || cConf.currencySymbol,
+              tax_name: newSettings.tax_name || cConf.taxName,
+              tax_rate: newSettings.tax_rate !== undefined ? newSettings.tax_rate : cConf.defaultTaxRate,
+              use_usd_pricing: newSettings.use_usd_pricing !== undefined ? newSettings.use_usd_pricing : cConf.useUsdPricingDefault,
+              exchange_rate: Number(newSettings.exchange_rate) || 816.9693,
+              exchange_rate_source: newSettings.exchange_rate_source || 'bcv',
+              ...dbUpdates
+            };
             await supabase
               .from('punto_nexus_company_settings')
-              .insert([{ company_id: companyId, ...dbUpdates }]);
+              .insert([fullInsertPayload]);
           } catch (insErr) {}
         }
 
@@ -1821,14 +1913,18 @@ export const PuntoNexusProvider = ({ children }) => {
       return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    const { use_usd_pricing, exchange_rate = 1.0, currency_symbol = '$', currency_code = 'VES' } = companySettings || {};
-    const rate = Number(exchange_rate) || 1.0;
+    const { use_usd_pricing } = companySettings || {};
+    const currencyCode = companySettings?.currency_code || (companySettings?.country === 'CL' ? 'CLP' : 'VES');
+    const currencySymbol = (companySettings?.currency_symbol && companySettings.currency_symbol !== 'null')
+      ? companySettings.currency_symbol
+      : (currencyCode === 'CLP' ? '$' : 'Bs.');
+    const rate = Number(companySettings?.exchange_rate) || 1.0;
 
     if (use_usd_pricing) {
       const localVal = num * rate;
-      const formattedLocal = currency_code === 'CLP'
-        ? (currency_symbol + ' ' + Math.round(localVal).toLocaleString('es-CL'))
-        : (currency_symbol + ' ' + localVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      const formattedLocal = currencyCode === 'CLP'
+        ? (currencySymbol + ' ' + Math.round(localVal).toLocaleString('es-CL'))
+        : (currencySymbol + ' ' + localVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
       const formattedUSD = '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       
@@ -1839,10 +1935,10 @@ export const PuntoNexusProvider = ({ children }) => {
         ? `${formattedUSD} ${formattedLocal}` 
         : `${formattedLocal} ${formattedUSD}`;
     } else {
-      if (currency_code === 'CLP') {
-        return currency_symbol + Math.round(num).toLocaleString('es-CL');
+      if (currencyCode === 'CLP') {
+        return currencySymbol + Math.round(num).toLocaleString('es-CL');
       } else {
-        return currency_symbol + ' ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return currencySymbol + ' ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
     }
   };
@@ -2280,10 +2376,19 @@ export const PuntoNexusProvider = ({ children }) => {
 
       const initialSettings = {
         company_name: name,
-        business_type: newGiro,
-        exchange_rate: 746.63,
+        country: 'VE',
         currency_code: 'VES',
-        use_usd_pricing: true
+        currency_symbol: 'Bs.',
+        tax_name: 'IVA',
+        tax_rate: 0.16,
+        use_usd_pricing: true,
+        exchange_rate_source: 'bcv',
+        exchange_rate: bcvRate || 816.9693,
+        business_type: newGiro,
+        enabled_modules: ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase'],
+        user_modules: {
+          dashboard: true, pos: true, tables: true, inventory: true, finances: true, branches: true, history: true, showcase: true
+        }
       };
       localStorage.setItem(`punto_nexus_company_settings_${mockId}`, JSON.stringify(initialSettings));
 
@@ -2312,10 +2417,19 @@ export const PuntoNexusProvider = ({ children }) => {
 
         const initialSettings = {
           company_name: name,
-          business_type: newGiro,
-          exchange_rate: 746.63,
+          country: 'VE',
           currency_code: 'VES',
-          use_usd_pricing: true
+          currency_symbol: 'Bs.',
+          tax_name: 'IVA',
+          tax_rate: 0.16,
+          use_usd_pricing: true,
+          exchange_rate_source: 'bcv',
+          exchange_rate: bcvRate || 816.9693,
+          business_type: newGiro,
+          enabled_modules: ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase'],
+          user_modules: {
+            dashboard: true, pos: true, tables: true, inventory: true, finances: true, branches: true, history: true, showcase: true
+          }
         };
         localStorage.setItem(`punto_nexus_company_settings_${createdId}`, JSON.stringify(initialSettings));
 
@@ -2329,6 +2443,22 @@ export const PuntoNexusProvider = ({ children }) => {
           }]);
         } catch (bErr) {
           console.warn("Aviso al crear sucursal matriz en Supabase:", bErr);
+        }
+
+        try {
+          await supabase.from('punto_nexus_company_settings').insert([{
+            company_id: createdId,
+            country: 'VE',
+            currency_code: 'VES',
+            currency_symbol: 'Bs.',
+            tax_name: 'IVA',
+            tax_rate: 0.1600,
+            use_usd_pricing: true,
+            exchange_rate_source: 'bcv',
+            exchange_rate: bcvRate || 816.9693
+          }]);
+        } catch (csErr) {
+          console.warn("Aviso al insertar company_settings en Supabase:", csErr);
         }
 
         setLoading(false);
@@ -3956,7 +4086,10 @@ export const PuntoNexusProvider = ({ children }) => {
     const savedMap = localStorage.getItem(mapKey);
     if (savedMap) {
       try {
-        return JSON.parse(savedMap);
+        const parsed = JSON.parse(savedMap);
+        if (parsed && (parsed['branch-matriz'] || parsed.rent !== undefined)) {
+          return parsed['branch-matriz'] ? parsed : { 'branch-matriz': parsed };
+        }
       } catch (e) {}
     }
     const legacySaved = localStorage.getItem(`punto_nexus_fixed_costs_${companyId || 'default'}`);
@@ -3965,12 +4098,6 @@ export const PuntoNexusProvider = ({ children }) => {
       'branch-matriz': legacyCosts
     };
   });
-
-  useEffect(() => {
-    if (companyId) {
-      localStorage.setItem(`punto_nexus_fixed_costs_by_branch_${companyId}`, JSON.stringify(fixedCostsMap));
-    }
-  }, [fixedCostsMap, companyId]);
 
   const activeBranchFixedCosts = useMemo(() => {
     const bId = activeBranchId || 'branch-matriz';
@@ -3985,14 +4112,14 @@ export const PuntoNexusProvider = ({ children }) => {
 
   const [expenses, setExpenses] = useState(() => {
     const saved = localStorage.getItem(`punto_nexus_expenses_${companyId || 'default'}`);
-    return saved ? JSON.parse(saved) : GLOBAL_DEFAULT_EXPENSES;
-  });
-
-  useEffect(() => {
-    if (companyId) {
-      localStorage.setItem(`punto_nexus_expenses_${companyId}`, JSON.stringify(expenses));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
     }
-  }, [expenses, companyId]);
+    return GLOBAL_DEFAULT_EXPENSES;
+  });
 
   const updateFixedCosts = (newCosts) => {
     const bId = activeBranchId || 'branch-matriz';
@@ -4018,16 +4145,34 @@ export const PuntoNexusProvider = ({ children }) => {
       branch_id: expenseData.branch_id || activeBranchId || 'branch-matriz',
       date: expenseData.date || new Date().toISOString().split('T')[0]
     };
-    setExpenses(prev => [newExpense, ...prev]);
+    setExpenses(prev => {
+      const updated = [newExpense, ...prev];
+      if (companyId) {
+        localStorage.setItem(`punto_nexus_expenses_${companyId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
     return newExpense;
   };
 
   const updateExpense = (id, updates) => {
-    setExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, ...updates } : exp));
+    setExpenses(prev => {
+      const updated = prev.map(exp => exp.id === id ? { ...exp, ...updates } : exp);
+      if (companyId) {
+        localStorage.setItem(`punto_nexus_expenses_${companyId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   const deleteExpense = (id) => {
-    setExpenses(prev => prev.filter(exp => exp.id !== id));
+    setExpenses(prev => {
+      const updated = prev.filter(exp => exp.id !== id);
+      if (companyId) {
+        localStorage.setItem(`punto_nexus_expenses_${companyId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   // Egresos filtrados por sucursal activa

@@ -33,13 +33,16 @@ export default function DualCurrencyDisplay({
     );
   }
 
-  const { exchange_rate = 1.0, currency_symbol = '$', currency_code = 'VES' } = companySettings || {};
-  const rate = Number(exchange_rate) || 1.0;
+  const currencyCode = companySettings?.currency_code || (companySettings?.country === 'CL' ? 'CLP' : 'VES');
+  const currencySymbol = (companySettings?.currency_symbol && companySettings.currency_symbol !== 'null')
+    ? companySettings.currency_symbol
+    : (currencyCode === 'CLP' ? '$' : 'Bs.');
+  const rate = Number(companySettings?.exchange_rate) || 1.0;
   const localVal = num * rate;
 
-  const formattedLocal = currency_code === 'CLP'
-    ? `${currency_symbol} ${Math.round(localVal).toLocaleString('es-CL')}`
-    : `${currency_symbol} ${localVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedLocal = currencyCode === 'CLP'
+    ? `${currencySymbol} ${Math.round(localVal).toLocaleString('es-CL')}`
+    : `${currencySymbol} ${localVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const formattedUSD = `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
