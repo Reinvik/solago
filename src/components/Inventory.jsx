@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
-import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
 
@@ -737,8 +737,13 @@ export default function Inventory() {
       ? Math.max(0, Math.floor(Number(productForm.min_stock)))
       : 5;
 
-    const allImages = Array.isArray(productForm.images) && productForm.images.length > 0
-      ? productForm.images
+    let currentImages = Array.isArray(productForm.images) ? [...productForm.images] : [];
+    if (urlImageInput && urlImageInput.trim() && !currentImages.includes(urlImageInput.trim())) {
+      currentImages.push(urlImageInput.trim());
+    }
+
+    const allImages = currentImages.length > 0
+      ? currentImages
       : (productForm.image_url ? [productForm.image_url] : []);
 
     const serializedSpecs = serializeProductSpecs({
@@ -1519,6 +1524,22 @@ export default function Inventory() {
                   </div>
                 </div>
 
+                {/* ── DESCRIPCIÓN DETALLADA (VISIBILIDAD INMEDIATA) ── */}
+                <div className="form-group" style={{ marginBottom: '18px' }}>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileText size={15} style={{ color: 'var(--color-cyan)' }} />
+                    <span>Descripción Detallada del Producto (Vitrina Online)</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Describe en detalle las características, sabor, uso, beneficios o presentación del producto..."
+                    value={productForm.description || ''}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
+                  />
+                </div>
+
                 {/* ── GALERÍA MULTI-FOTOS DEL PRODUCTO (PORTADA + FOTOS ADICIONALES) ── */}
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
@@ -1799,6 +1820,59 @@ export default function Inventory() {
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* ── FICHA TÉCNICA ADICIONAL (DIMENSIONES, MATERIALES, NOTAS) ── */}
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '14px' }}>
+                    {/* Dimensiones */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Ruler size={14} style={{ color: 'var(--color-cyan)' }} />
+                        <span>Dimensiones / Medidas</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Ej: 30 x 20 x 15 cm / 450g / Talla M"
+                        value={productForm.dimensions || ''}
+                        onChange={(e) => setProductForm({ ...productForm, dimensions: e.target.value })}
+                        style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
+                      />
+                    </div>
+
+                    {/* Materiales */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Layers size={14} style={{ color: 'var(--color-amber)' }} />
+                        <span>Materiales / Ingredientes</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Ej: Acero inoxidable, Cuero / Pan brioche"
+                        value={productForm.materials || ''}
+                        onChange={(e) => setProductForm({ ...productForm, materials: e.target.value })}
+                        style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Comentarios del Dueño */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <MessageSquare size={14} style={{ color: 'var(--color-emerald)' }} />
+                      <span>Comentarios y Notas del Vendedor / Dueño</span>
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows={2}
+                      placeholder="Recomendaciones de uso, detalles de calidad o sugerencias para tus clientes..."
+                      value={productForm.owner_notes || ''}
+                      onChange={(e) => setProductForm({ ...productForm, owner_notes: e.target.value })}
+                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
+                    />
+                  </div>
                 </div>
 
               </div>
@@ -2088,89 +2162,7 @@ export default function Inventory() {
 
               </div>
 
-              {/* SECCIÓN 3: ESPECIFICACIONES TÉCNICAS Y COMENTARIOS DEL DUEÑO (VITRINA / MERCADO LIBRE) */}
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', fontWeight: '800', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    <Package size={18} style={{ color: 'var(--color-cyan)' }} />
-                    <span>Ficha Técnica y Comentarios de Vitrina (Estilo Mercado Libre)</span>
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 800, background: 'rgba(6, 182, 212, 0.1)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '8px' }}>
-                    Visible en Vitrina QR
-                  </span>
-                </div>
-                <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px', fontWeight: '500' }}>
-                  Estos datos y notas se muestran en la ventana ampliada cuando los clientes hacen clic en la foto del producto en el catálogo online.
-                </p>
-
-                {/* Descripción Detallada del Producto */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Package size={14} style={{ color: 'var(--color-cyan)' }} />
-                    <span>Descripción Detallada del Producto</span>
-                  </label>
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    placeholder="Descripción comercial atractiva del producto, características principales, sabor, textura o beneficios..."
-                    value={productForm.description || ''}
-                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                    style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                  {/* Dimensiones */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Ruler size={14} style={{ color: 'var(--color-cyan)' }} />
-                      <span>Dimensiones / Medidas</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Ej: 30 x 20 x 15 cm / Peso: 450g / Talla M"
-                      value={productForm.dimensions || ''}
-                      onChange={(e) => setProductForm({ ...productForm, dimensions: e.target.value })}
-                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
-                    />
-                  </div>
-
-                  {/* Materiales */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Layers size={14} style={{ color: 'var(--color-amber)' }} />
-                      <span>Materiales / Ingredientes</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Ej: Acero quirúrgico, Cuero / Pan brioche"
-                      value={productForm.materials || ''}
-                      onChange={(e) => setProductForm({ ...productForm, materials: e.target.value })}
-                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Comentarios del Dueño */}
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MessageSquare size={14} style={{ color: 'var(--color-emerald)' }} />
-                    <span>Comentarios y Notas del Vendedor / Dueño</span>
-                  </label>
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    placeholder="Recomendaciones de uso, detalles de calidad, notas de preparación o sugerencias para tus clientes..."
-                    value={productForm.owner_notes || ''}
-                    onChange={(e) => setProductForm({ ...productForm, owner_notes: e.target.value })}
-                    style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
-                  />
-                </div>
-              </div>
-
-              {/* SECCIÓN 4: INFORMACIÓN DE PAGO Y PROVEEDOR */}
+              {/* SECCIÓN 3: INFORMACIÓN DE PAGO Y PROVEEDOR */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: '#0f172a', fontWeight: '800', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <CreditCard size={18} style={{ color: 'var(--color-amber)' }} />
