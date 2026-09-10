@@ -93,7 +93,12 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
   const [customerName, setCustomerName] = useState('');
   const [customerGiro, setCustomerGiro] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [applyTax, setApplyTax] = useState(true);
+  const [applyTax, setApplyTax] = useState(() => (companySettings?.tax_enabled !== false && Number(companySettings?.tax_rate ?? 0.16) > 0));
+
+  useEffect(() => {
+    const isTaxOn = companySettings?.tax_enabled !== false && Number(companySettings?.tax_rate ?? 0.16) > 0;
+    setApplyTax(isTaxOn);
+  }, [companySettings?.tax_enabled, companySettings?.tax_rate]);
   const [cashCurrency, setCashCurrency] = useState(() => companySettings.currency_code || 'CLP');
   const [cashReceived, setCashReceived] = useState('');
   const [givenChangeBill, setGivenChangeBill] = useState('');
@@ -573,14 +578,17 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     }
   };
 
-  // Cálculos de totales ─ Separación de Subtotal Exento, Base Imponible y Total IVA (16%)
-  const taxRate = Number(companySettings.tax_rate) || 0.16;
+  // Cálculos de totales ─ Separación de Subtotal Exento, Base Imponible y Total IVA
+  const isCompanyTaxEnabled = companySettings?.tax_enabled !== false && Number(companySettings?.tax_rate ?? 0.16) > 0;
+  const taxRate = isCompanyTaxEnabled
+    ? ((companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.16)
+    : 0;
   
   let cartExemptTotal = 0;
   let cartTaxableTotalWithTax = 0;
 
   cart.forEach(item => {
-    const isExempt = !!item.part?.is_exempt || !!item.part?.is_tax_exempt;
+    const isExempt = !isCompanyTaxEnabled || !!item.part?.is_exempt || !!item.part?.is_tax_exempt;
     const sub = (item.cantidad || 1) * (item.part?.sell_price || 0);
     if (isExempt) {
       cartExemptTotal += sub;
@@ -590,9 +598,9 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
   });
 
   const numericDiscount = Number(discount) || 0;
-  const cartTaxableBase = cartTaxableTotalWithTax > 0 ? (cartTaxableTotalWithTax / (1 + taxRate)) : 0;
+  const cartTaxableBase = (taxRate > 0 && cartTaxableTotalWithTax > 0) ? (cartTaxableTotalWithTax / (1 + taxRate)) : cartTaxableTotalWithTax;
   const cartNetAfterDisc = Math.max(0, (cartExemptTotal + cartTaxableBase) - numericDiscount);
-  const taxAmount = applyTax ? (cartTaxableTotalWithTax - cartTaxableBase) : 0;
+  const taxAmount = (isCompanyTaxEnabled && applyTax) ? (cartTaxableTotalWithTax - cartTaxableBase) : 0;
   const cartSubtotal = cartExemptTotal + cartTaxableTotalWithTax;
   const cartTotal = Math.max(0, cartSubtotal - numericDiscount);
 
@@ -2399,23 +2407,34 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
               
               {/* Toggle de Aplicar IVA */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: applyTax ? 'rgba(16, 185, 129, 0.06)' : '#f8fafc', border: applyTax ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #cbd5e1', padding: '8px 12px', borderRadius: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    id="pos-apply-tax-check"
-                    checked={applyTax}
-                    onChange={(e) => setApplyTax(e.target.checked)}
-                    style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="pos-apply-tax-check" style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', cursor: 'pointer', margin: 0 }}>
-                    {companySettings.tax_name || 'IVA'} ({((companySettings.tax_rate || 0.19) * 100).toFixed(0)}%)
-                  </label>
+              {isCompanyTaxEnabled ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: applyTax ? 'rgba(16, 185, 129, 0.06)' : '#f8fafc', border: applyTax ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #cbd5e1', padding: '8px 12px', borderRadius: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="pos-apply-tax-check"
+                      checked={applyTax}
+                      onChange={(e) => setApplyTax(e.target.checked)}
+                      style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="pos-apply-tax-check" style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', cursor: 'pointer', margin: 0 }}>
+                      {companySettings.tax_name || 'IVA'} ({((companySettings.tax_rate ?? 0.19) * 100).toFixed(0)}%)
+                    </label>
+                  </div>
+                  <span style={{ fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', background: applyTax ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)', color: applyTax ? '#059669' : '#64748b' }}>
+                    {applyTax ? 'CON IVA' : 'SIN IVA'}
+                  </span>
                 </div>
-                <span style={{ fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', background: applyTax ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)', color: applyTax ? '#059669' : '#64748b' }}>
-                  {applyTax ? 'CON IVA' : 'SIN IVA'}
-                </span>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(6, 182, 212, 0.06)', border: '1px solid rgba(6, 182, 212, 0.25)', padding: '8px 12px', borderRadius: '12px' }}>
+                  <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0e7490' }}>
+                    Régimen de la Empresa:
+                  </span>
+                  <span style={{ fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px', background: 'rgba(6, 182, 212, 0.15)', color: '#0891b2' }}>
+                    SIN IVA (0%)
+                  </span>
+                </div>
+              )}
 
               {/* Descuento Directo */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', padding: '8px 12px', borderRadius: '12px' }}>
@@ -3020,15 +3039,23 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                 <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', color: '#cbd5e1' }}>
                   {paymentMethod}
                 </span>
-                <div style={{ fontSize: '11px', color: '#38bdf8', marginTop: '6px', fontWeight: 800 }}>
-                  Subtotal Exento (E): {formatCurrency(cartExemptTotal)}
-                </div>
-                <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
-                  Base Imponible (Gravable): {formatCurrency(cartTaxableBase)}
-                </div>
-                {applyTax && (
-                  <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px', fontWeight: 800 }}>
-                    Total {companySettings.tax_name || 'IVA'} ({(taxRate * 100).toFixed(0)}%): +{formatCurrency(taxAmount)}
+                {isCompanyTaxEnabled ? (
+                  <>
+                    <div style={{ fontSize: '11px', color: '#38bdf8', marginTop: '6px', fontWeight: 800 }}>
+                      Subtotal Exento (E): {formatCurrency(cartExemptTotal)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
+                      Base Imponible (Gravable): {formatCurrency(cartTaxableBase)}
+                    </div>
+                    {applyTax && (
+                      <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px', fontWeight: 800 }}>
+                        Total {companySettings.tax_name || 'IVA'} ({(taxRate * 100).toFixed(0)}%): +{formatCurrency(taxAmount)}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: '11px', color: '#38bdf8', marginTop: '6px', fontWeight: 800 }}>
+                    Régimen Sin IVA (0%)
                   </div>
                 )}
               </div>

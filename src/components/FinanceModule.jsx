@@ -273,20 +273,25 @@ export default function FinanceModule() {
   // CÁLCULOS: 4 KPIS SUPERIORES (NEXUS RPM STYLE)
   // ---------------------------------------------------------
   const monthSalesGross = monthSalesTotal;
-  const taxRateVal = Number(companySettings?.tax_rate || 0.19);
+  const isTaxFreeCompany = companySettings?.tax_enabled === false || Number(companySettings?.tax_rate) === 0;
+  const taxRateVal = isTaxFreeCompany 
+    ? 0 
+    : ((companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.19);
   const taxRatePct = taxRateVal > 1 ? taxRateVal : taxRateVal * 100;
   const taxRateDecimal = taxRatePct / 100;
 
   const monthSalesNet = useMemo(() => {
+    if (isTaxFreeCompany || taxRateDecimal === 0) return monthSalesGross;
     if (!monthSales || monthSales.length === 0) return monthSalesGross / (1 + taxRateDecimal);
     const sumNet = monthSales.reduce((acc, s) => {
       if (s.net_total !== undefined && s.net_total !== null && Number(s.net_total) > 0) return acc + Number(s.net_total);
       return acc + (Number(s.total_sell || s.total || 0) / (1 + taxRateDecimal));
     }, 0);
     return sumNet;
-  }, [monthSales, monthSalesGross, taxRateDecimal]);
+  }, [monthSales, monthSalesGross, taxRateDecimal, isTaxFreeCompany]);
 
   const monthSalesDebitoIVA = useMemo(() => {
+    if (isTaxFreeCompany || taxRateDecimal === 0) return 0;
     if (!monthSales || monthSales.length === 0) return Math.max(0, monthSalesGross - monthSalesNet);
     const totalTax = monthSales.reduce((acc, s) => {
       if (s.tax_amount !== undefined && s.tax_amount !== null && Number(s.tax_amount) > 0) {
@@ -300,11 +305,11 @@ export default function FinanceModule() {
       return acc;
     }, 0);
     return totalTax > 0 ? totalTax : Math.max(0, monthSalesGross - monthSalesNet);
-  }, [monthSales, monthSalesGross, monthSalesNet, taxRateDecimal]);
+  }, [monthSales, monthSalesGross, monthSalesNet, taxRateDecimal, isTaxFreeCompany]);
 
   const totalEgresosDelMes = totalFixedCosts + monthVariableCostsTotal;
-  const monthEgresosNet = totalEgresosDelMes / (1 + taxRateDecimal);
-  const monthEgresosCreditoIVA = Math.max(0, totalEgresosDelMes - monthEgresosNet);
+  const monthEgresosNet = isTaxFreeCompany ? totalEgresosDelMes : totalEgresosDelMes / (1 + taxRateDecimal);
+  const monthEgresosCreditoIVA = isTaxFreeCompany ? 0 : Math.max(0, totalEgresosDelMes - monthEgresosNet);
 
   const resultadoNetoPeriodo = monthSalesGross - totalEgresosDelMes;
   const margenNetoPeriodoPct = monthSalesGross > 0 ? Math.round((resultadoNetoPeriodo / monthSalesGross) * 100) : 0;
@@ -805,28 +810,42 @@ export default function FinanceModule() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                IVA DÉBITO (VENTAS)
+                {isTaxFreeCompany ? 'RÉGIMEN FISCAL' : 'IVA DÉBITO (VENTAS)'}
               </span>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.12)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isTaxFreeCompany ? 'rgba(6, 182, 212, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: isTaxFreeCompany ? 'var(--color-cyan, #06b6d4)' : '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Calculator size={16} />
               </div>
             </div>
 
             <div className="kpi-card-value" style={{ marginTop: '2px', marginBottom: '6px' }}>
-              <DualCurrencyDisplay amount={monthSalesDebitoIVA} fontSize="24px" primaryColor="#d97706" showSwap={false} />
+              {isTaxFreeCompany ? (
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--color-cyan, #06b6d4)', height: '36px', display: 'flex', alignItems: 'center' }}>
+                  SIN IVA (0%)
+                </div>
+              ) : (
+                <DualCurrencyDisplay amount={monthSalesDebitoIVA} fontSize="24px" primaryColor="#d97706" showSwap={false} />
+              )}
             </div>
 
             <div style={{ paddingTop: '8px', borderTop: '1px solid #f1f5f9', fontSize: '10.5px', color: '#64748b', fontWeight: 600, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Crédito Egresos ({taxRatePct.toFixed(0)}%):</span>
-                <span style={{ color: '#ef4444', fontWeight: 700 }}>-{formatCurrency(monthEgresosCreditoIVA)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                <span>Estado IVA Neto:</span>
-                <span style={{ color: netIvaBalance > 0 ? '#d97706' : '#10b981', fontWeight: 800 }}>
-                  {netIvaBalance > 0 ? `Por Pagar: ${formatCurrency(netIvaBalance)}` : `A Favor: ${formatCurrency(remanenteFavorIVA)}`}
-                </span>
-              </div>
+              {isTaxFreeCompany ? (
+                <div style={{ color: '#0891b2', fontWeight: 700 }}>
+                  Empresa exenta de IVA. Precios directos sin débito fiscal.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Crédito Egresos ({taxRatePct.toFixed(0)}%):</span>
+                    <span style={{ color: '#ef4444', fontWeight: 700 }}>-{formatCurrency(monthEgresosCreditoIVA)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                    <span>Estado IVA Neto:</span>
+                    <span style={{ color: netIvaBalance > 0 ? '#d97706' : '#10b981', fontWeight: 800 }}>
+                      {netIvaBalance > 0 ? `Por Pagar: ${formatCurrency(netIvaBalance)}` : `A Favor: ${formatCurrency(remanenteFavorIVA)}`}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1130,7 +1149,7 @@ export default function FinanceModule() {
                           className="form-input"
                           value={tempFixedCosts.rent || ''}
                           onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, rent: Number(e.target.value) })}
-                          placeholder="500"
+                          placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
@@ -1142,7 +1161,7 @@ export default function FinanceModule() {
                           className="form-input"
                           value={tempFixedCosts.salaries || ''}
                           onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, salaries: Number(e.target.value) })}
-                          placeholder="1200"
+                          placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
@@ -1154,7 +1173,7 @@ export default function FinanceModule() {
                           className="form-input"
                           value={tempFixedCosts.software || ''}
                           onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, software: Number(e.target.value) })}
-                          placeholder="50"
+                          placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
@@ -1166,7 +1185,7 @@ export default function FinanceModule() {
                           className="form-input"
                           value={tempFixedCosts.marketing || ''}
                           onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, marketing: Number(e.target.value) })}
-                          placeholder="100"
+                          placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
@@ -1178,7 +1197,7 @@ export default function FinanceModule() {
                           className="form-input"
                           value={tempFixedCosts.other || ''}
                           onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, other: Number(e.target.value) })}
-                          placeholder="70"
+                          placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>

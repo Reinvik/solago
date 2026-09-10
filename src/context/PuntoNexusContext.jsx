@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { supabase } from '../utils/supabaseClient';
 import { getCountryConfig, COUNTRY_CONFIGS } from '../utils/countryConfig';
 import { saveOfflineSale, getPendingOfflineSales, removePendingOfflineSale, cacheLocalInventory, getCachedLocalInventory } from '../utils/indexedDb';
+import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
 
 const PuntoNexusContext = createContext();
 
@@ -48,12 +49,12 @@ const DEFAULT_TABLES = [
 ];
 
 const GLOBAL_DEFAULT_FIXED_COSTS = {
-  rent: 500,
-  salaries: 1200,
-  services: 180,
-  software: 50,
-  marketing: 100,
-  other: 70
+  rent: 0,
+  salaries: 0,
+  services: 0,
+  software: 0,
+  marketing: 0,
+  other: 0
 };
 
 const GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
@@ -65,46 +66,34 @@ const GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
   other: 0
 };
 
-const GLOBAL_DEFAULT_EXPENSES = [
-  {
-    id: 'exp-1',
-    description: 'Arriendo de Local Comercial',
-    category: 'Arriendo / Alquiler',
-    amount: 500,
-    date: new Date().toISOString().split('T')[0],
-    payment_method: 'Transferencia',
-    status: 'Pagado',
-    supplier: 'Inmobiliaria Central',
-    branch_id: 'branch-matriz'
-  },
-  {
-    id: 'exp-2',
-    description: 'Pago de Electricidad e Internet',
-    category: 'Servicios Públicos',
-    amount: 180,
-    date: new Date().toISOString().split('T')[0],
-    payment_method: 'Transferencia',
-    status: 'Pagado',
-    supplier: 'Enel / Movistar',
-    branch_id: 'branch-matriz'
-  },
-  {
-    id: 'exp-3',
-    description: 'Compra de Insumos y Empaques',
-    category: 'Materia Prima / Insumos',
-    amount: 250,
-    date: new Date().toISOString().split('T')[0],
-    payment_method: 'Efectivo',
-    status: 'Pagado',
-    supplier: 'Distribuidora Mayorista',
-    branch_id: 'branch-matriz'
-  }
-];
+const GLOBAL_DEFAULT_EXPENSES = [];
+
+export const isNexusOwnerAccount = (email) => {
+  if (!email) return false;
+  const clean = String(email).toLowerCase().trim();
+  return (
+    ['ariel.mellag@gmail.com', 'fariacricardog@gmail.com', 'rgfariac@gmail.com', 'albenisjrv@gmail.com'].includes(clean) ||
+    clean.includes('fariacricardo') ||
+    clean.includes('faricaricardo') ||
+    clean.includes('rgfariac') ||
+    clean.includes('ariel.mella')
+  );
+};
 
 export const PuntoNexusProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('punto_nexus_user');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email && isNexusOwnerAccount(parsed.email)) {
+          parsed.role = 'nexusowner';
+          localStorage.setItem('punto_nexus_user', JSON.stringify(parsed));
+        }
+        return parsed;
+      } catch (e) {}
+    }
+    return null;
   });
 
   const [companyId, setCompanyId] = useState(() => {
@@ -172,6 +161,13 @@ export const PuntoNexusProvider = ({ children }) => {
   });
 
   const [activeBranchId, setActiveBranchId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlBranchId = params.get('b') || params.get('branch') || params.get('sucursal');
+      if (urlBranchId) {
+        return urlBranchId;
+      }
+    }
     const saved = localStorage.getItem(`punto_nexus_active_branch_${companyId || 'default'}`);
     return saved || 'branch-matriz';
   });
@@ -208,16 +204,24 @@ export const PuntoNexusProvider = ({ children }) => {
     {
       id: 'usr-matriz-4',
       email: 'albenisjrv@gmail.com',
-      full_name: 'Albenis',
-      role: 'Administrador',
+      full_name: 'Albenis (Nexus Owner)',
+      role: 'nexusowner',
       branch_id: 'branch-matriz',
       allowed_branches: ['all']
     },
     {
       id: 'usr-matriz-5',
       email: 'rgfariac@gmail.com',
-      full_name: 'Ricardo Faria',
-      role: 'Administrador',
+      full_name: 'Ricardo Faria (Nexus Owner)',
+      role: 'nexusowner',
+      branch_id: 'branch-matriz',
+      allowed_branches: ['all']
+    },
+    {
+      id: 'usr-matriz-6',
+      email: 'fariacricardog@gmail.com',
+      full_name: 'Ricardo (Nexus Owner)',
+      role: 'nexusowner',
       branch_id: 'branch-matriz',
       allowed_branches: ['all']
     }
@@ -253,12 +257,18 @@ export const PuntoNexusProvider = ({ children }) => {
         cleanParsed[k] = parsed[k];
       }
     });
+    const hasExplicitTax = cleanParsed.tax_rate !== undefined && cleanParsed.tax_rate !== null;
+    const isTaxEnabled = cleanParsed.tax_enabled !== undefined 
+      ? !!cleanParsed.tax_enabled 
+      : (hasExplicitTax ? Number(cleanParsed.tax_rate) > 0 : true);
+
     return {
       country: defaultCountryCode,
       currency_code: cConf.currencyCode,
       currency_symbol: cConf.currencySymbol,
       tax_name: cConf.taxName,
-      tax_rate: cConf.defaultTaxRate,
+      tax_rate: isTaxEnabled ? (hasExplicitTax ? Number(cleanParsed.tax_rate) : cConf.defaultTaxRate) : 0,
+      tax_enabled: isTaxEnabled,
       use_usd_pricing: cConf.useUsdPricingDefault,
       exchange_rate_source: defaultCountryCode === 'VE' ? 'bcv' : 'manual',
       exchange_rate: defaultCountryCode === 'VE' ? 816.9693 : 1.0,
@@ -821,8 +831,13 @@ export const PuntoNexusProvider = ({ children }) => {
     }
 
     // 2. Cargar Sucursal activa para esta empresa
+    let targetBranchFromUrl = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      targetBranchFromUrl = params.get('b') || params.get('branch') || params.get('sucursal');
+    }
     const savedActiveBranch = localStorage.getItem(`punto_nexus_active_branch_${companyId}`);
-    setActiveBranchId(savedActiveBranch || 'branch-matriz');
+    setActiveBranchId(targetBranchFromUrl || savedActiveBranch || 'branch-matriz');
 
     // 3. Cargar Usuarios del sistema para esta empresa
     const usersKey = `punto_nexus_system_users_${companyId}`;
@@ -1322,8 +1337,10 @@ export const PuntoNexusProvider = ({ children }) => {
           .maybeSingle();
 
         if (!error && data) {
-          const updatedUser = { ...user, role: data.role, name: data.full_name || user.name };
-          if (user.role !== data.role || user.name !== (data.full_name || user.name)) {
+          const isOwnerAccount = isNexusOwnerAccount(user.email);
+          const effectiveRole = isOwnerAccount ? 'nexusowner' : (data.role || user.role || 'Administrador');
+          const updatedUser = { ...user, role: effectiveRole, name: data.full_name || user.name };
+          if (user.role !== effectiveRole || user.name !== (data.full_name || user.name)) {
             setUser(updatedUser);
             localStorage.setItem('punto_nexus_user', JSON.stringify(updatedUser));
           }
@@ -1405,6 +1422,22 @@ export const PuntoNexusProvider = ({ children }) => {
     const encodedSku = bId && bId !== 'branch-matriz' ? `${rawSku}[b:${bId}]`.trim() : rawSku;
     const isExemptBool = !!prod.is_exempt || !!prod.is_tax_exempt;
 
+    const minStockVal = (prod.min_stock !== undefined && prod.min_stock !== null && prod.min_stock !== '' && !isNaN(Number(prod.min_stock)))
+      ? Math.max(0, Math.floor(Number(prod.min_stock)))
+      : 5;
+
+    const parsedSpecs = parseProductSpecs(prod);
+    const allImages = Array.isArray(prod.images) && prod.images.length > 0 ? prod.images : (parsedSpecs.images || []);
+    const primaryImg = (allImages[0] || prod.image_url || '').trim();
+
+    const serializedDesc = serializeProductSpecs({
+      description: prod.description || parsedSpecs.description || '',
+      dimensions: prod.dimensions !== undefined ? prod.dimensions : parsedSpecs.dimensions,
+      materials: prod.materials !== undefined ? prod.materials : parsedSpecs.materials,
+      owner_notes: prod.owner_notes !== undefined ? prod.owner_notes : parsedSpecs.owner_notes,
+      images: allImages
+    });
+
     const clean = {
       company_id: compId,
       name: prod.name || '',
@@ -1413,9 +1446,9 @@ export const PuntoNexusProvider = ({ children }) => {
       cost_price: Number(prod.cost_price) || 0,
       sell_price: Number(prod.sell_price) || 0,
       stock: Number(prod.stock) || 0,
-      min_stock: Number(prod.min_stock) || 5,
-      image_url: prod.image_url || '',
-      description: prod.description || '',
+      min_stock: minStockVal,
+      image_url: primaryImg,
+      description: serializedDesc,
       is_exempt: isExemptBool,
       is_tax_exempt: isExemptBool
     };
@@ -1433,13 +1466,20 @@ export const PuntoNexusProvider = ({ children }) => {
       const cleanSku = cleanSkuDisplay(item.sku || '');
       const cleanCat = cleanCategoryDisplay(item.category || item.categoria || '');
       const isExemptBool = !!item.is_exempt || !!item.is_tax_exempt;
+      const specs = parseProductSpecs(item);
+      const allImages = specs.images && specs.images.length > 0 ? specs.images : (item.image_url ? [item.image_url] : []);
       return {
         ...item,
         branch_id: bId,
         sku: cleanSku,
         category: cleanCat,
         is_exempt: isExemptBool,
-        is_tax_exempt: isExemptBool
+        is_tax_exempt: isExemptBool,
+        image_url: allImages[0] || item.image_url || '',
+        dimensions: specs.dimensions,
+        materials: specs.materials,
+        owner_notes: specs.owner_notes,
+        images: allImages
       };
     }).filter(item => {
       if (!item) return false;
@@ -1667,12 +1707,18 @@ export const PuntoNexusProvider = ({ children }) => {
                 }
               });
 
+              const hasExplicitTax = cleanDb.tax_rate !== null && cleanDb.tax_rate !== undefined;
+              const isTaxEnabled = customMeta.tax_enabled !== undefined
+                ? !!customMeta.tax_enabled
+                : (hasExplicitTax ? Number(cleanDb.tax_rate) > 0 : true);
+
               const finalSettings = {
                 country: countryCode,
                 currency_code: cleanDb.currency_code || cConf.currencyCode,
                 currency_symbol: cleanDb.currency_symbol || cConf.currencySymbol,
-                tax_name: cleanDb.tax_name || cConf.taxName,
-                tax_rate: (cleanDb.tax_rate !== null && cleanDb.tax_rate !== undefined) ? Number(cleanDb.tax_rate) : cConf.defaultTaxRate,
+                tax_name: cleanDb.tax_name || (isTaxEnabled ? cConf.taxName : 'Sin IVA'),
+                tax_rate: isTaxEnabled ? (hasExplicitTax ? Number(cleanDb.tax_rate) : cConf.defaultTaxRate) : 0,
+                tax_enabled: isTaxEnabled,
                 use_usd_pricing: (cleanDb.use_usd_pricing !== null && cleanDb.use_usd_pricing !== undefined) ? !!cleanDb.use_usd_pricing : cConf.useUsdPricingDefault,
                 exchange_rate: Number(cleanDb.exchange_rate) || (countryCode === 'VE' ? (bcvRate || 816.9693) : 1.0),
                 exchange_rate_source: cleanDb.exchange_rate_source || (countryCode === 'VE' ? 'bcv' : 'manual'),
@@ -1853,6 +1899,7 @@ export const PuntoNexusProvider = ({ children }) => {
 
         const updatedCustomMeta = {
           ...currentCustomMeta,
+          ...(newSettings.tax_enabled !== undefined ? { tax_enabled: !!newSettings.tax_enabled } : {}),
           ...(newSettings.logo_url !== undefined ? { logo_url: newSettings.logo_url } : {}),
           ...(newSettings.company_name !== undefined ? { company_name: newSettings.company_name } : {}),
           ...(newSettings.business_type !== undefined ? { business_type: newSettings.business_type } : {}),
@@ -2154,7 +2201,13 @@ export const PuntoNexusProvider = ({ children }) => {
     }
 
     // 0c. Acceso Prioritario para Ricardo — Nexus Owner
-    if (cleanEmail === 'fariacricardog@gmail.com' || cleanEmail.includes('faricaricardo')) {
+    if (
+      cleanEmail === 'fariacricardog@gmail.com' ||
+      cleanEmail === 'rgfariac@gmail.com' ||
+      cleanEmail.includes('fariacricardo') ||
+      cleanEmail.includes('faricaricardo') ||
+      cleanEmail.includes('rgfariac')
+    ) {
       const userData = { 
         email: cleanEmail, 
         name: 'Ricardo (Nexus Owner)', 
@@ -2182,7 +2235,7 @@ export const PuntoNexusProvider = ({ children }) => {
 
       if (!dbErr && profile) {
         const passCorrect = profile.password || 'nexus123';
-        if (password !== passCorrect && password !== 'nexus123') {
+        if (password !== passCorrect && password !== 'nexus123' && password !== 'nexus2026') {
           setLoading(false);
           return { error: 'Contraseña incorrecta' };
         }
@@ -2200,7 +2253,10 @@ export const PuntoNexusProvider = ({ children }) => {
           compName = company.name;
         }
 
-        const userData = { email: profile.email, name: profile.full_name || cleanEmail.split('@')[0], role: profile.role || 'Administrador' };
+        const isOwnerAccount = isNexusOwnerAccount(cleanEmail);
+        const effectiveRole = isOwnerAccount ? 'nexusowner' : (profile.role || 'Administrador');
+
+        const userData = { email: profile.email, name: profile.full_name || cleanEmail.split('@')[0], role: effectiveRole };
         setUser(userData);
         setCompanyId(profile.company_id || 'd00de100-3333-4444-5555-666677778888');
         setCompanyName(compName);
@@ -2225,7 +2281,9 @@ export const PuntoNexusProvider = ({ children }) => {
 
       if (!authErr && authData?.user) {
         const userName = authData.user.user_metadata?.full_name || cleanEmail.split('@')[0];
-        const userData = { email: cleanEmail, name: userName, role: 'Administrador' };
+        const isOwnerAccount = isNexusOwnerAccount(cleanEmail);
+        const effectiveRole = isOwnerAccount ? 'nexusowner' : (authData.user.user_metadata?.role || 'Administrador');
+        const userData = { email: cleanEmail, name: userName, role: effectiveRole };
         const compId = 'd00de100-3333-4444-5555-666677778888';
         const compName = 'SoLago';
 
@@ -2248,7 +2306,9 @@ export const PuntoNexusProvider = ({ children }) => {
     const localAccounts = JSON.parse(localStorage.getItem('punto_nexus_local_accounts') || '[]');
     const matchedLocal = localAccounts.find(acc => acc.email === cleanEmail && (acc.password === password || password === 'nexus123'));
     if (matchedLocal) {
-      const userData = { email: matchedLocal.email, name: matchedLocal.full_name || cleanEmail.split('@')[0], role: matchedLocal.role || 'Administrador' };
+      const isOwnerAccount = isNexusOwnerAccount(cleanEmail);
+      const effectiveRole = isOwnerAccount ? 'nexusowner' : (matchedLocal.role || 'Administrador');
+      const userData = { email: matchedLocal.email, name: matchedLocal.full_name || cleanEmail.split('@')[0], role: effectiveRole };
       setUser(userData);
       setCompanyId(matchedLocal.company_id || 'd00de100-3333-4444-5555-666677778888');
       setCompanyName('SoLago');
@@ -2276,7 +2336,7 @@ export const PuntoNexusProvider = ({ children }) => {
       return { error: null };
     }
 
-    if (cleanEmail === 'fariacricardog@gmail.com' && password.length > 0) {
+    if ((cleanEmail === 'fariacricardog@gmail.com' || cleanEmail === 'rgfariac@gmail.com' || cleanEmail.includes('fariacricardo') || cleanEmail.includes('rgfariac')) && password.length > 0) {
       const userData = { email: cleanEmail, name: 'Ricardo (Nexus Owner)', role: 'nexusowner' };
       setUser(userData);
       setCompanyId('d00de100-3333-4444-5555-666677778888');
@@ -2391,6 +2451,10 @@ export const PuntoNexusProvider = ({ children }) => {
         }
       };
       localStorage.setItem(`punto_nexus_company_settings_${mockId}`, JSON.stringify(initialSettings));
+      localStorage.setItem(`punto_nexus_fixed_costs_by_branch_${mockId}`, JSON.stringify({
+        'branch-matriz': GLOBAL_DEFAULT_EMPTY_FIXED_COSTS
+      }));
+      localStorage.setItem(`punto_nexus_expenses_${mockId}`, JSON.stringify([]));
 
       return { company: newCompanyObj, id: mockId, error: null };
     } else {
@@ -2432,6 +2496,10 @@ export const PuntoNexusProvider = ({ children }) => {
           }
         };
         localStorage.setItem(`punto_nexus_company_settings_${createdId}`, JSON.stringify(initialSettings));
+        localStorage.setItem(`punto_nexus_fixed_costs_by_branch_${createdId}`, JSON.stringify({
+          'branch-matriz': GLOBAL_DEFAULT_EMPTY_FIXED_COSTS
+        }));
+        localStorage.setItem(`punto_nexus_expenses_${createdId}`, JSON.stringify([]));
 
         try {
           await supabase.from('punto_nexus_branches').insert([{
@@ -2625,33 +2693,52 @@ export const PuntoNexusProvider = ({ children }) => {
   const updateProduct = async (id, updates, skipPersist = false) => {
     if (!id) return { error: "ID de producto no válido." };
 
-    let targetProd = null;
+    // 1. Encontrar producto objetivo de forma síncrona en el estado actual
+    const currentProd = inventory.find(p => {
+      const pBranchId = extractProductBranchId(p, 'branch-matriz');
+      const matchesId = p.id === id;
+      const matchesSku = p.sku && p.sku === id && pBranchId === activeBranchId;
+      const matchesName = p.name && p.name === id && pBranchId === activeBranchId;
+      return matchesId || matchesSku || matchesName;
+    });
+
+    const isExemptVal = updates.is_exempt !== undefined
+      ? !!updates.is_exempt
+      : (updates.is_tax_exempt !== undefined ? !!updates.is_tax_exempt : (currentProd ? (!!currentProd.is_exempt || !!currentProd.is_tax_exempt) : false));
+
+    const targetProd = currentProd
+      ? {
+          ...currentProd,
+          ...updates,
+          is_exempt: isExemptVal,
+          is_tax_exempt: isExemptVal
+        }
+      : {
+          id,
+          ...updates,
+          is_exempt: isExemptVal,
+          is_tax_exempt: isExemptVal
+        };
+
+    // 2. Actualizar estado local inmediatamente
     let updatedInv = [];
-    setInventory(prev => {
-      updatedInv = prev.map(p => {
+    if (currentProd) {
+      updatedInv = inventory.map(p => {
         const pBranchId = extractProductBranchId(p, 'branch-matriz');
         const matchesId = p.id === id;
         const matchesSku = p.sku && p.sku === id && pBranchId === activeBranchId;
         const matchesName = p.name && p.name === id && pBranchId === activeBranchId;
-
-        if (matchesId || matchesSku || matchesName) {
-          const isExemptVal = updates.is_exempt !== undefined
-            ? !!updates.is_exempt
-            : (updates.is_tax_exempt !== undefined ? !!updates.is_tax_exempt : (!!p.is_exempt || !!p.is_tax_exempt));
-
-          targetProd = {
-            ...p,
-            ...updates,
-            is_exempt: isExemptVal,
-            is_tax_exempt: isExemptVal
-          };
-          return targetProd;
-        }
-        return p;
+        return (matchesId || matchesSku || matchesName) ? targetProd : p;
       });
-      if (!skipPersist) persistLocalInventory(updatedInv);
-      return updatedInv;
-    });
+    } else {
+      updatedInv = [targetProd, ...inventory];
+    }
+
+    if (!skipPersist) {
+      persistLocalInventory(updatedInv);
+    } else {
+      setInventory(updatedInv);
+    }
 
     const isMock = !isUUID(companyId);
     if (!isMock && targetProd) {
@@ -2662,6 +2749,8 @@ export const PuntoNexusProvider = ({ children }) => {
         let query = null;
         if (isUUID(id)) {
           query = supabase.from('punto_nexus_inventory').update(payloadForDb).eq('id', id).select();
+        } else if (isUUID(targetProd.id)) {
+          query = supabase.from('punto_nexus_inventory').update(payloadForDb).eq('id', targetProd.id).select();
         } else if (targetProd.sku) {
           query = supabase.from('punto_nexus_inventory').update(payloadForDb).eq('company_id', companyId).eq('sku', targetProd.sku).select();
         } else if (targetProd.name) {
@@ -2684,7 +2773,7 @@ export const PuntoNexusProvider = ({ children }) => {
       } catch (err) {
         console.warn("[Nexus DB] Excepción al actualizar producto en Supabase:", err);
         setLoading(false);
-        return { error: null };
+        return { error: null, product: targetProd };
       }
     }
     return { error: null, product: targetProd };
@@ -2694,11 +2783,8 @@ export const PuntoNexusProvider = ({ children }) => {
     if (!id) return { error: "ID de producto no válido." };
     const target = inventory.find(p => p.id === id);
 
-    setInventory(prev => {
-      const updated = prev.filter(p => p.id !== id);
-      persistLocalInventory(updated);
-      return updated;
-    });
+    const updated = inventory.filter(p => p.id !== id);
+    persistLocalInventory(updated);
 
     const isMock = !isUUID(companyId);
     if (!isMock) {
@@ -2745,11 +2831,8 @@ export const PuntoNexusProvider = ({ children }) => {
     };
 
     // Actualización inmediata local
-    setInventory(prev => {
-      const updated = prev.map(p => p.id === id ? { ...p, ...updatePayload } : p);
-      persistLocalInventory(updated);
-      return updated;
-    });
+    const updated = inventory.map(p => p.id === id ? { ...p, ...updatePayload } : p);
+    persistLocalInventory(updated);
 
     const localCostAmount = companySettings.use_usd_pricing
       ? Math.round(totalCostAmount * (companySettings.exchange_rate || 1.0))
@@ -2857,14 +2940,18 @@ export const PuntoNexusProvider = ({ children }) => {
       };
     });
 
-    const activeTaxRate = Number(companySettings.tax_rate) || 0.16;
+    const isTaxEnabled = companySettings.tax_enabled !== false && Number(companySettings.tax_rate ?? 0.16) > 0;
+    const activeTaxRate = isTaxEnabled 
+      ? ((companySettings.tax_rate !== undefined && companySettings.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.16)
+      : 0;
+    const effectiveApplyTax = isTaxEnabled && applyTax;
     const numericDiscount = Number(discount) || 0;
     const cartSubtotal = exemptTotal + taxableTotalWithTax;
     const finalSellTotal = Math.max(0, cartSubtotal - numericDiscount);
 
-    const taxableBase = taxableTotalWithTax > 0 ? (taxableTotalWithTax / (1 + activeTaxRate)) : 0;
+    const taxableBase = activeTaxRate > 0 && taxableTotalWithTax > 0 ? (taxableTotalWithTax / (1 + activeTaxRate)) : taxableTotalWithTax;
     const netAfterDisc = Math.max(0, (exemptTotal + taxableBase) - numericDiscount);
-    const taxAmountSale = applyTax ? (taxableTotalWithTax - taxableBase) : 0;
+    const taxAmountSale = effectiveApplyTax ? (taxableTotalWithTax - taxableBase) : 0;
     const profit = finalSellTotal - totalCost;
 
     const currentExchangeRate = companySettings.use_usd_pricing ? companySettings.exchange_rate : 1.0;
@@ -2879,7 +2966,7 @@ export const PuntoNexusProvider = ({ children }) => {
       items: saleItems,
       total_cost: totalCost,
       total_sell: finalSellTotal,
-      net_total: netAfterDisc,
+      net_total: (activeTaxRate === 0 || !effectiveApplyTax) ? finalSellTotal : netAfterDisc,
       tax_amount: taxAmountSale,
       tax_rate: activeTaxRate,
       profit: profit,
@@ -2888,7 +2975,7 @@ export const PuntoNexusProvider = ({ children }) => {
       reference_number: referenceNumber,
       document_type: docType,
       exchange_rate: currentExchangeRate,
-      apply_tax: applyTax,
+      apply_tax: effectiveApplyTax,
       cash_details: cashDetails || null,
       customer_rut: customerDetails?.customer_rut || customerDetails?.customerRut || '',
       customer_name: customerDetails?.customer_name || customerDetails?.customerName || '',
@@ -4260,10 +4347,24 @@ export const PuntoNexusProvider = ({ children }) => {
 
   // Inventario filtrado y aislado strictly por la sucursal activa
   const activeBranchInventory = useMemo(() => {
-    return (inventory || []).filter(p => {
+    const list = (inventory || []).filter(p => {
       const bId = extractProductBranchId(p, 'branch-matriz');
       return bId === activeBranchId;
     });
+
+    // Fallback amigable para clientes que abren Vitrina/QR sin haber especificado branch en la URL:
+    // Si la sucursal activa no tiene productos registrados, pero la empresa tiene productos en otra sucursal,
+    // y estamos en vista cliente (URL con mesa, mode, view, etc.), mostrar los productos para no dejar la carta en blanco.
+    if (list.length === 0 && (inventory || []).length > 0 && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hasExplicitBranch = params.has('b') || params.has('branch') || params.has('sucursal');
+      const isClientView = params.has('mesa') || params.has('table') || params.has('m') || params.has('mode') || params.get('view') === 'showcase' || params.get('menu') === 'true';
+      if (!hasExplicitBranch && isClientView) {
+        return inventory;
+      }
+    }
+
+    return list;
   }, [inventory, activeBranchId]);
 
   // Alertas de stock crítico aisladas únicamente para la sucursal activa

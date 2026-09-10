@@ -33,13 +33,23 @@ export default function SalesHistory() {
       try { items = JSON.parse(items); } catch (e) { items = []; }
     }
 
-    const taxRate = Number(selectedSale.tax_rate || companySettings?.tax_rate || 0.16);
+    const isTaxFreeSale = selectedSale.apply_tax === false ||
+      (selectedSale.tax_rate !== undefined && selectedSale.tax_rate !== null ? Number(selectedSale.tax_rate) === 0 : false) ||
+      (companySettings?.tax_enabled === false) ||
+      (Number(companySettings?.tax_rate) === 0);
+
+    const taxRate = isTaxFreeSale 
+      ? 0 
+      : ((selectedSale.tax_rate !== undefined && selectedSale.tax_rate !== null) 
+        ? Number(selectedSale.tax_rate) 
+        : ((companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.16));
+
     let exemptTotal = 0;
     let taxableTotalWithTax = 0;
 
     items.forEach(it => {
       const sub = Number(it.subtotal || ((it.cantidad || 1) * (it.precio_unitario || it.sell_price || 0))) || 0;
-      if (it.is_exempt || it.is_tax_exempt) {
+      if (isTaxFreeSale || it.is_exempt || it.is_tax_exempt) {
         exemptTotal += sub;
       } else {
         taxableTotalWithTax += sub;
@@ -47,7 +57,7 @@ export default function SalesHistory() {
     });
 
     const hasExemptItems = items.some(it => it.is_exempt || it.is_tax_exempt);
-    if (!hasExemptItems && Number(selectedSale.tax_amount) === 0 && items.length > 0) {
+    if (!hasExemptItems && Number(selectedSale.tax_amount) === 0 && items.length > 0 && !isTaxFreeSale) {
       exemptTotal = items.reduce((sum, it) => sum + Number(it.subtotal || ((it.cantidad || 1) * (it.precio_unitario || 0))), 0);
       taxableTotalWithTax = 0;
     }
@@ -55,19 +65,19 @@ export default function SalesHistory() {
     const discount = Number(selectedSale.discount) || 0;
     const itemsTotalSum = exemptTotal + taxableTotalWithTax;
 
-    const taxableBase = taxableTotalWithTax > 0 ? (taxableTotalWithTax / (1 + taxRate)) : 0;
-    const calcTaxAmount = (selectedSale.apply_tax !== false && taxableTotalWithTax > 0) ? (taxableTotalWithTax - taxableBase) : 0;
+    const taxableBase = (taxRate > 0 && taxableTotalWithTax > 0) ? (taxableTotalWithTax / (1 + taxRate)) : taxableTotalWithTax;
+    const calcTaxAmount = (!isTaxFreeSale && selectedSale.apply_tax !== false && taxableTotalWithTax > 0) ? (taxableTotalWithTax - taxableBase) : 0;
 
     const totalSell = itemsTotalSum > 0 ? Math.max(0, itemsTotalSum - discount) : (Number(selectedSale.total_sell) || 0);
-    const netTotal = itemsTotalSum > 0 ? Math.max(0, (exemptTotal + taxableBase) - discount) : (Number(selectedSale.net_total) || totalSell);
+    const netTotal = isTaxFreeSale ? totalSell : (itemsTotalSum > 0 ? Math.max(0, (exemptTotal + taxableBase) - discount) : (Number(selectedSale.net_total) || totalSell));
 
     return {
       items,
-      exemptTotal,
-      taxableBase,
-      taxAmount: calcTaxAmount,
       totalSell,
-      netTotal
+      netTotal,
+      taxAmount: calcTaxAmount,
+      taxRate,
+      isTaxFreeSale
     };
   }, [selectedSale, companySettings]);
 
@@ -531,20 +541,20 @@ export default function SalesHistory() {
               <h4 style={{ fontSize: '13px', fontWeight: 800, marginBottom: '10px', borderBottom: '1px solid var(--border-glass)', paddingBottom: '6px' }}>Detalle de Productos</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxHeight: '180px', overflowY: 'auto' }}>
                 {selectedSaleTotals.items.map((item, idx) => {
-                  const isExempt = !!(item.is_exempt || item.is_tax_exempt || selectedSaleTotals.taxAmount === 0);
+                  const isExempt = selectedSaleTotals.isTaxFreeSale || !!(item.is_exempt || item.is_tax_exempt || selectedSaleTotals.taxAmount === 0);
                   const rawUnit = Number(item.precio_unitario || item.sell_price || 0);
                   const rawSub = Number(item.subtotal || ((item.cantidad || 1) * rawUnit)) || 0;
-                  const taxRate = selectedSale.tax_rate || companySettings?.tax_rate || 0.16;
+                  const taxRate = selectedSaleTotals.taxRate;
 
-                  const netUnit = (!isExempt && selectedSale?.apply_tax !== false) ? (rawUnit / (1 + taxRate)) : rawUnit;
-                  const netSub = (!isExempt && selectedSale?.apply_tax !== false) ? (rawSub / (1 + taxRate)) : rawSub;
+                  const netUnit = (!isExempt && selectedSale?.apply_tax !== false && taxRate > 0) ? (rawUnit / (1 + taxRate)) : rawUnit;
+                  const netSub = (!isExempt && selectedSale?.apply_tax !== false && taxRate > 0) ? (rawSub / (1 + taxRate)) : rawSub;
 
                   return (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                       <div style={{ maxWidth: '65%' }}>
                         <div style={{ fontWeight: 650, display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>{item.nombre || item.name}</span>
-                          {isExempt && (
+                          {!selectedSaleTotals.isTaxFreeSale && isExempt && (
                             <span style={{ fontSize: '9.5px', fontWeight: 900, background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
                               (E) Exento
                             </span>
@@ -564,14 +574,16 @@ export default function SalesHistory() {
               <h4 style={{ fontSize: '13px', fontWeight: 800, marginBottom: '10px', borderBottom: '1px solid var(--border-glass)', paddingBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Cómputo Financiero</span>
                 <span style={{ fontSize: '11px', color: 'var(--color-cyan)', fontWeight: 700 }}>
-                  IVA ({(Number(selectedSale.tax_rate || companySettings?.tax_rate || 0.16) * 100).toFixed(0)}%) Reflejado
+                  {selectedSaleTotals.isTaxFreeSale ? 'Régimen Sin IVA (0%)' : `IVA (${(selectedSaleTotals.taxRate * 100).toFixed(0)}%) Reflejado`}
                 </span>
               </h4>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', marginBottom: '24px' }}>
                 {/* Subtotal Neto / Exento */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Subtotal Neto / Exento:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {selectedSaleTotals.isTaxFreeSale ? 'Subtotal Venta:' : 'Subtotal Neto / Exento:'}
+                  </span>
                   <DualCurrencyDisplay 
                     amount={selectedSaleTotals.netTotal} 
                     fontSize="13px" 
@@ -590,18 +602,20 @@ export default function SalesHistory() {
                 )}
 
                 {/* Monto del IVA */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    Monto IVA ({(Number(selectedSale.tax_rate || companySettings?.tax_rate || 0.16) * 100).toFixed(0)}%):
-                  </span>
-                  <DualCurrencyDisplay 
-                    amount={selectedSaleTotals.taxAmount} 
-                    fontSize="13px" 
-                    primaryColor={selectedSaleTotals.taxAmount > 0 ? '#0284c7' : '#10b981'} 
-                    align="right" 
-                    showSwap={false} 
-                  />
-                </div>
+                {!selectedSaleTotals.isTaxFreeSale && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Monto IVA ({(selectedSaleTotals.taxRate * 100).toFixed(0)}%):
+                    </span>
+                    <DualCurrencyDisplay 
+                      amount={selectedSaleTotals.taxAmount} 
+                      fontSize="13px" 
+                      primaryColor={selectedSaleTotals.taxAmount > 0 ? '#0284c7' : '#10b981'} 
+                      align="right" 
+                      showSwap={false} 
+                    />
+                  </div>
+                )}
 
                 {/* Total Final Recibido */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--border-glass)', paddingTop: '8px', marginTop: '4px' }}>

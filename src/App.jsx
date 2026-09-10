@@ -72,7 +72,10 @@ function AppContent() {
     );
   }, []);
 
-  const isAdmin = !user?.role || user?.role === 'admin' || user?.role === 'Administrador' || user?.role === 'nexusowner' || user?.role === 'owner';
+  const isNexusOwner = Boolean(
+    user?.role && ['nexusowner', 'nexus_owner', 'owner'].includes(String(user.role).toLowerCase())
+  );
+  const isAdmin = !user?.role || isNexusOwner || ['admin', 'administrador', 'gerente'].includes(String(user.role).toLowerCase());
   const hasBranches = Array.isArray(branches) && branches.length > 0;
 
   const isModuleVisible = (moduleKey) => {
@@ -318,7 +321,7 @@ function AppContent() {
             </a>
           )}
 
-          {user?.role === 'nexusowner' && (
+          {isNexusOwner && (
             <a 
               className={`sidebar-item ${activeTab === 'owner' ? 'active' : ''}`}
               onClick={() => { setActiveTab('owner'); if(window.innerWidth <= 768) setMenuCollapsed(true); }}
@@ -359,7 +362,7 @@ function AppContent() {
             <div className="user-details">
               <span className="user-name">{user.name || 'Admin'}</span>
               <span className="user-role-badge">
-                {user.role === 'nexusowner' ? 'Super Admin' : 'Administrador'}
+                {isNexusOwner ? 'Super Admin' : 'Administrador'}
               </span>
             </div>
           </div>

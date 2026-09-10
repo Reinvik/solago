@@ -44,13 +44,23 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
     return `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
   };
 
-  const taxRate = sale?.tax_rate || companySettings.tax_rate || 0.16;
+  const isSaleTaxFree = sale?.apply_tax === false || 
+    (sale?.tax_rate !== undefined && sale?.tax_rate !== null ? Number(sale.tax_rate) === 0 : false) || 
+    (companySettings?.tax_enabled === false) ||
+    (Number(companySettings?.tax_rate) === 0);
+
+  const taxRate = isSaleTaxFree 
+    ? 0 
+    : ((sale?.tax_rate !== undefined && sale?.tax_rate !== null) 
+      ? Number(sale.tax_rate) 
+      : ((companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.16));
+
   let exemptTotal = 0;
   let taxableTotalWithTax = 0;
 
   items.forEach(it => {
     const sub = Number(it.subtotal || ((it.cantidad || 1) * (it.precio_unitario || it.sell_price || 0))) || 0;
-    if (it.is_exempt || it.is_tax_exempt) {
+    if (isSaleTaxFree || it.is_exempt || it.is_tax_exempt) {
       exemptTotal += sub;
     } else {
       taxableTotalWithTax += sub;
@@ -66,10 +76,10 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
   const discount = Number(sale?.discount) || 0;
   const itemsTotalSum = exemptTotal + taxableTotalWithTax;
 
-  const taxableBase = taxableTotalWithTax > 0 ? (taxableTotalWithTax / (1 + taxRate)) : 0;
-  const calcTaxAmount = (sale?.apply_tax !== false) ? (taxableTotalWithTax - taxableBase) : 0;
+  const taxableBase = (taxRate > 0 && taxableTotalWithTax > 0) ? (taxableTotalWithTax / (1 + taxRate)) : taxableTotalWithTax;
+  const calcTaxAmount = (!isSaleTaxFree && sale?.apply_tax !== false) ? (taxableTotalWithTax - taxableBase) : 0;
   const totalAmount = itemsTotalSum > 0 ? Math.max(0, itemsTotalSum - discount) : (sale?.total_sell || 0);
-  const netTotalAmount = itemsTotalSum > 0 ? Math.max(0, (exemptTotal + taxableBase) - discount) : (sale?.net_total || totalAmount);
+  const netTotalAmount = isSaleTaxFree ? totalAmount : (itemsTotalSum > 0 ? Math.max(0, (exemptTotal + taxableBase) - discount) : (sale?.net_total || totalAmount));
 
   return `
     <!DOCTYPE html>
@@ -303,20 +313,25 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
       </table>
 
       <div class="totals">
-        <div class="total-row">
-          <span>SUBTOTAL EXENTO (E):</span>
-          <span class="text-bold">${formatAmount(exemptTotal)}</span>
-        </div>
-        <div class="total-row">
-          <span>BASE IMPONIBLE (GRAVABLE):</span>
-          <span>${formatAmount(taxableBase)}</span>
-        </div>
-        ${sale?.apply_tax !== false ? `
+        ${isSaleTaxFree ? `
+          <div class="total-row">
+            <span>SUBTOTAL:</span>
+            <span class="text-bold">${formatAmount(itemsTotalSum)}</span>
+          </div>
+        ` : `
+          <div class="total-row">
+            <span>SUBTOTAL EXENTO (E):</span>
+            <span class="text-bold">${formatAmount(exemptTotal)}</span>
+          </div>
+          <div class="total-row">
+            <span>BASE IMPONIBLE (GRAVABLE):</span>
+            <span>${formatAmount(taxableBase)}</span>
+          </div>
           <div class="total-row">
             <span>TOTAL IVA (${(taxRate * 100).toFixed(0)}%):</span>
             <span>${formatAmount(calcTaxAmount)}</span>
           </div>
-        ` : ''}
+        `}
         ${discount > 0 ? `
           <div class="total-row">
             <span>DESCUENTO APLICADO:</span>

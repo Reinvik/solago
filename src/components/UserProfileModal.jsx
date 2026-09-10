@@ -237,6 +237,9 @@ export default function UserProfileModal({ isOpen, onClose }) {
                 fontSize: '13px'
               }}
             >
+              {['nexusowner', 'nexus_owner', 'owner'].includes((user?.role || '').toLowerCase()) && (
+                <option value="nexusowner">👑 Nexus Owner (Super Admin)</option>
+              )}
               <option value="admin">👑 Administrador / Dueño (Acceso total & cambio de sucursales)</option>
               <option value="user">👤 Cajero / Operador (Restringido a sucursal y módulos configurados)</option>
             </select>

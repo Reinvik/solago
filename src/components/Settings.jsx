@@ -75,6 +75,86 @@ export default function Settings({ onOpenProfileModal }) {
   const [branchSyncMsg, setBranchSyncMsg] = useState(null);
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
 
+  // ─── Pestañas de Configuración y Navegación Rápida ───
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('punto_nexus_settings_tab');
+    const validTabs = ['empresa', 'marca', 'impuestos', 'moneda', 'sistema'];
+    return validTabs.includes(saved) ? saved : 'empresa';
+  });
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    localStorage.setItem('punto_nexus_settings_tab', tabId);
+  };
+
+  // ─── Gestión de Régimen Tributario (Con IVA vs Sin IVA) ───
+  const isTaxEnabled = companySettings.tax_enabled !== false && Number(companySettings.tax_rate ?? 0.16) > 0;
+  const currentTaxPct = isTaxEnabled 
+    ? Math.round(Number(companySettings.tax_rate !== undefined && companySettings.tax_rate !== null ? companySettings.tax_rate : 0.19) * 100)
+    : 0;
+
+  const SETTINGS_TABS = [
+    {
+      id: 'empresa',
+      label: 'Empresa & Sedes',
+      icon: Building2,
+      badge: `${branches.length || 1} ${branches.length === 1 ? 'sede' : 'sedes'}`
+    },
+    {
+      id: 'marca',
+      label: 'Marca & Menú QR',
+      icon: Palette,
+      badge: 'QR & Logo'
+    },
+    {
+      id: 'impuestos',
+      label: 'Régimen Fiscal & IVA',
+      icon: Percent,
+      badge: isTaxEnabled ? `${currentTaxPct}% IVA` : '0% Exento'
+    },
+    {
+      id: 'moneda',
+      label: 'Moneda & Tasas',
+      icon: DollarSign,
+      badge: companySettings.use_usd_pricing ? 'USD' : (companySettings.currency_code || 'CLP')
+    },
+    {
+      id: 'sistema',
+      label: 'Sistema & Permisos',
+      icon: ShieldCheck,
+      badge: null
+    }
+  ];
+
+  const handleEnableTax = async () => {
+    const country = companySettings.country || 'CL';
+    const defaultRate = country === 'VE' ? 0.16 : country === 'AR' ? 0.21 : 0.19;
+    const res = await updateCompanySettings({
+      tax_enabled: true,
+      tax_rate: defaultRate,
+      tax_name: 'IVA'
+    });
+    if (res.error) alert(res.error);
+  };
+
+  const handleDisableTax = async () => {
+    const res = await updateCompanySettings({
+      tax_enabled: false,
+      tax_rate: 0.0,
+      tax_name: 'Sin IVA'
+    });
+    if (res.error) alert(res.error);
+  };
+
+  const handleChangeTaxRate = async (newPct) => {
+    const numericRate = Math.max(0, Math.min(100, Number(newPct) || 0)) / 100;
+    const res = await updateCompanySettings({
+      tax_rate: numericRate,
+      tax_enabled: numericRate > 0
+    });
+    if (res.error) alert(res.error);
+  };
+
   const handleSyncBranchesFromDB = async () => {
     const companyId = companySettings.company_id || localStorage.getItem('punto_nexus_company_id');
     const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companyId);
@@ -219,8 +299,75 @@ export default function Settings({ onOpenProfileModal }) {
         </div>
       </div>
 
-      {/* PANEL 0: SELECTOR DE GIRO COMERCIAL DEL NEGOCIO */}
-      <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+      {/* Barra de Navegación por Pestañas */}
+      <div style={{
+        display: 'flex',
+        gap: '6px',
+        overflowX: 'auto',
+        padding: '6px',
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }}>
+        {SETTINGS_TABS.map(tab => {
+          const IconComp = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleTabChange(tab.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                borderRadius: '12px',
+                border: isActive ? '1.5px solid var(--color-cyan, #06b6d4)' : '1.5px solid transparent',
+                background: isActive 
+                  ? 'linear-gradient(135deg, rgba(6,182,212,0.12), rgba(99,102,241,0.06))' 
+                  : 'transparent',
+                color: isActive ? '#0891b2' : '#64748b',
+                fontWeight: isActive ? 800 : 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.18s ease',
+                flex: '1 1 0',
+                justifyContent: 'center',
+                minWidth: 'fit-content'
+              }}
+            >
+              <IconComp size={16} style={{ color: isActive ? '#0891b2' : '#94a3b8', flexShrink: 0 }} />
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span style={{
+                  fontSize: '10.5px',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '99px',
+                  background: isActive ? '#0891b2' : '#f1f5f9',
+                  color: isActive ? '#ffffff' : '#64748b',
+                  border: isActive ? 'none' : '1px solid #e2e8f0',
+                  lineHeight: '1.2',
+                  flexShrink: 0
+                }}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ─── PESTAÑA 1: EMPRESA & SEDES ─── */}
+      {activeTab === 'empresa' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
+          {/* PANEL 0: SELECTOR DE GIRO COMERCIAL DEL NEGOCIO */}
+          <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Store size={16} />
@@ -428,6 +575,47 @@ export default function Settings({ onOpenProfileModal }) {
         </div>
       </div>
 
+      {/* PANEL 3: HORARIOS COMERCIALES */}
+      <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Clock size={16} />
+          Horarios Comerciales
+        </h3>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="form-group">
+            <label className="form-label">Hora de Apertura</label>
+            <input
+              type="time"
+              className="form-input"
+              value={companySettings.opening_time || '09:00'}
+              onChange={async (e) => {
+                const res = await updateCompanySettings({ opening_time: e.target.value });
+                if (res.error) alert(res.error);
+              }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Hora de Cierre</label>
+            <input
+              type="time"
+              className="form-input"
+              value={companySettings.closing_time || '20:00'}
+              onChange={async (e) => {
+                const res = await updateCompanySettings({ closing_time: e.target.value });
+                if (res.error) alert(res.error);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* ─── PESTAÑA 2: MARCA & MENÚ QR ─── */}
+  {activeTab === 'marca' && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
       {/* PANEL 0B: IDENTIDAD DE MARCA, LOGO Y COLORES DEL MENÚ QR */}
       <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -714,18 +902,20 @@ export default function Settings({ onOpenProfileModal }) {
         </div>
 
       </div>
+    </div>
+  )}
 
-      {/* Grid de Paneles */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
-        {/* PANEL 1: LOCALIZACIÓN GEOGRÁFICA Y TRIBUTOS */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
+  {/* ─── PESTAÑA 3: RÉGIMEN FISCAL & IVA ─── */}
+  {activeTab === 'impuestos' && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
+      {/* PANEL 1: LOCALIZACIÓN GEOGRÁFICA Y TRIBUTOS */}
+      <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Globe size={16} />
-            Localización y Reglas Tributarias
+            Localización y Régimen Tributario (IVA / Impuestos)
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
             <div className="form-group">
               <label className="form-label">País de Operación</label>
               <select
@@ -740,8 +930,6 @@ export default function Settings({ onOpenProfileModal }) {
                       ...updates,
                       currency_code: 'VES',
                       currency_symbol: 'Bs.',
-                      tax_name: 'IVA',
-                      tax_rate: 0.16,
                       use_usd_pricing: true,
                       exchange_rate_source: 'bcv'
                     };
@@ -750,8 +938,6 @@ export default function Settings({ onOpenProfileModal }) {
                       ...updates,
                       currency_code: 'COP',
                       currency_symbol: 'Col$',
-                      tax_name: 'IVA',
-                      tax_rate: 0.19,
                       use_usd_pricing: false,
                       exchange_rate_source: 'manual',
                       exchange_rate: 1.0
@@ -761,8 +947,6 @@ export default function Settings({ onOpenProfileModal }) {
                       ...updates,
                       currency_code: 'ARS',
                       currency_symbol: 'AR$',
-                      tax_name: 'IVA',
-                      tax_rate: 0.21,
                       use_usd_pricing: false,
                       exchange_rate_source: 'manual',
                       exchange_rate: 1.0
@@ -773,48 +957,219 @@ export default function Settings({ onOpenProfileModal }) {
                       ...updates,
                       currency_code: 'CLP',
                       currency_symbol: '$',
-                      tax_name: 'IVA',
-                      tax_rate: 0.19,
                       use_usd_pricing: false,
                       exchange_rate_source: 'manual',
                       exchange_rate: 1.0
                     };
                   }
+
+                  // Si la empresa trabaja Con IVA, aplicar la tasa por defecto del nuevo país
+                  if (isTaxEnabled) {
+                    if (country === 'VE') updates.tax_rate = 0.16;
+                    else if (country === 'AR') updates.tax_rate = 0.21;
+                    else updates.tax_rate = 0.19;
+                    updates.tax_name = 'IVA';
+                    updates.tax_enabled = true;
+                  } else {
+                    // Si opera Sin IVA, mantener régimen exento
+                    updates.tax_rate = 0.0;
+                    updates.tax_enabled = false;
+                  }
+
                   const res = await updateCompanySettings(updates);
                   if (res.error) alert(res.error);
                 }}
               >
-                <option value="CL">Chile (CLP / 19% IVA)</option>
-                <option value="VE">Venezuela (VES / 16% IVA / Fijación en Dólares)</option>
-                <option value="CO">Colombia (COP / 19% IVA)</option>
-                <option value="AR">Argentina (ARS / 21% IVA)</option>
+                <option value="CL">Chile (CLP / Moneda Local)</option>
+                <option value="VE">Venezuela (VES / Fijación USD)</option>
+                <option value="CO">Colombia (COP / Moneda Local)</option>
+                <option value="AR">Argentina (ARS / Moneda Local)</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Impuesto Configurado ({companySettings.tax_name || 'IVA'})</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ width: '40%', textAlign: 'center', background: '#f8fafc', color: 'var(--text-muted)' }}
-                  value={companySettings.tax_name || 'IVA'}
-                  disabled
-                />
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ width: '60%', background: '#f8fafc', color: 'var(--text-muted)' }}
-                  value={`${((companySettings.tax_rate || 0) * 100).toFixed(0)}% (Fijado por Regla de País)`}
-                  disabled
-                />
+              <label className="form-label">Estado Fiscal Actual</label>
+              <div style={{ display: 'flex', alignItems: 'center', height: '42px', padding: '0 14px', borderRadius: '10px', background: isTaxEnabled ? 'rgba(16, 185, 129, 0.08)' : 'rgba(6, 182, 212, 0.08)', border: isTaxEnabled ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(6, 182, 212, 0.3)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: isTaxEnabled ? '#059669' : 'var(--color-cyan, #06b6d4)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isTaxEnabled ? (
+                    <>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                      AFECTO A {companySettings.tax_name || 'IVA'} ({currentTaxPct}%)
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-cyan, #06b6d4)', display: 'inline-block' }}></span>
+                      RÉGIMEN SIN IVA (EXENTO 0%)
+                    </>
+                  )}
+                </span>
               </div>
             </div>
           </div>
-        </div>
 
+          {/* SELECCIÓN DE RÉGIMEN FISCAL: CON IVA VS SIN IVA */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+            <label className="form-label" style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-primary)', marginBottom: '12px', display: 'block' }}>
+              Modalidad de Facturación e Impuestos de tu Negocio
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+              {/* Opción 1: CON IVA */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleEnableTax}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleEnableTax(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  border: isTaxEnabled ? '2px solid #10b981' : '1px solid var(--border-glass, #cbd5e1)',
+                  background: isTaxEnabled ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255,255,255,0.02)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: isTaxEnabled ? '#10b981' : '#64748b',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginTop: '2px'
+                }}>
+                  {isTaxEnabled ? <Check size={14} strokeWidth={3} /> : <Percent size={13} />}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: isTaxEnabled ? '#059669' : 'var(--text-primary)' }}>
+                      Con IVA (Afecto a Impuesto)
+                    </span>
+                    {isTaxEnabled && (
+                      <span style={{ fontSize: '10px', fontWeight: 900, background: '#10b981', color: '#ffffff', padding: '2px 6px', borderRadius: '4px' }}>
+                        ACTIVO
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                    Aplica y desglosa débito fiscal ({currentTaxPct || 19}%) en ventas, boletas y comprobantes fiscales.
+                  </p>
+                </div>
+              </div>
+
+              {/* Opción 2: SIN IVA */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleDisableTax}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDisableTax(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  border: !isTaxEnabled ? '2px solid var(--color-cyan, #06b6d4)' : '1px solid var(--border-glass, #cbd5e1)',
+                  background: !isTaxEnabled ? 'rgba(6, 182, 212, 0.08)' : 'rgba(255,255,255,0.02)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: !isTaxEnabled ? 'var(--color-cyan, #06b6d4)' : '#64748b',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginTop: '2px'
+                }}>
+                  {!isTaxEnabled ? <Check size={14} strokeWidth={3} /> : <ShieldCheck size={14} />}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: !isTaxEnabled ? 'var(--color-cyan, #06b6d4)' : 'var(--text-primary)' }}>
+                      Sin IVA (Régimen Exento / 0%)
+                    </span>
+                    {!isTaxEnabled && (
+                      <span style={{ fontSize: '10px', fontWeight: 900, background: 'var(--color-cyan, #06b6d4)', color: '#ffffff', padding: '2px 6px', borderRadius: '4px' }}>
+                        ACTIVO
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                    Precios netos directos sin recargo de IVA. No genera débito fiscal ni exige cálculos de impuestos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* DETALLES ESPECÍFICOS SEGÚN LA MODALIDAD SELECCIONADA */}
+            {isTaxEnabled ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', background: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '16px 20px', borderRadius: '12px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>Nombre del Impuesto</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={companySettings.tax_name || 'IVA'}
+                    onChange={async (e) => {
+                      const res = await updateCompanySettings({ tax_name: e.target.value.toUpperCase() });
+                      if (res.error) alert(res.error);
+                    }}
+                    placeholder="IVA"
+                    style={{ width: '100%', fontSize: '13px' }}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>Tasa de IVA Aplicada (%)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      className="form-input"
+                      value={currentTaxPct}
+                      onChange={(e) => handleChangeTaxRate(e.target.value)}
+                      style={{ width: '90px', fontSize: '14px', fontWeight: 800, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)' }}>%</span>
+                    <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+                      (Predeterminado: {companySettings.country === 'VE' ? '16% VE' : companySettings.country === 'AR' ? '21% AR' : '19% CL'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: 'rgba(6, 182, 212, 0.05)', border: '1px solid rgba(6, 182, 212, 0.2)', padding: '16px 20px', borderRadius: '12px' }}>
+                <ShieldCheck size={26} color="var(--color-cyan, #06b6d4)" style={{ flexShrink: 0 }} />
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Operación en Régimen Sin IVA Activa:</strong> Tu negocio operará con tasa 0% de IVA. En el Punto de Venta (POS) el cobro será limpio por el precio de los productos, en Inventario el precio neto será igual al precio de venta, y los comprobantes impresos no emitirán desglose de débito fiscal ni base gravable.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ─── PESTAÑA 4: MONEDA & TASAS ─── */}
+    {activeTab === 'moneda' && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
         {/* PANEL 2: MONEDA Y TASAS DE CAMBIO */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
+        <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <DollarSign size={16} />
             Moneda Base y Fijación Cambiaria (Multidivisa)
@@ -1013,43 +1368,12 @@ export default function Settings({ onOpenProfileModal }) {
             )}
           </div>
         </div>
+      </div>
+    )}
 
-        {/* PANEL 3: HORARIOS COMERCIALES */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={16} />
-            Horarios Comerciales
-          </h3>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div className="form-group">
-              <label className="form-label">Hora de Apertura</label>
-              <input
-                type="time"
-                className="form-input"
-                value={companySettings.opening_time || '09:00'}
-                onChange={async (e) => {
-                  const res = await updateCompanySettings({ opening_time: e.target.value });
-                  if (res.error) alert(res.error);
-                }}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Hora de Cierre</label>
-              <input
-                type="time"
-                className="form-input"
-                value={companySettings.closing_time || '20:00'}
-                onChange={async (e) => {
-                  const res = await updateCompanySettings({ closing_time: e.target.value });
-                  if (res.error) alert(res.error);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
+    {/* ─── PESTAÑA 5: SISTEMA & SEGURIDAD ─── */}
+    {activeTab === 'sistema' && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
         {/* PANEL 3.5: GESTIÓN DE MÓDULOS & PERMISOS DE USUARIOS (SOLO ADMINS) */}
         <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -1199,9 +1523,9 @@ export default function Settings({ onOpenProfileModal }) {
             )}
           </div>
         </div>
-
       </div>
+    )}
 
-    </div>
-  );
+  </div>
+);
 }
