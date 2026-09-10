@@ -40,7 +40,10 @@ import {
   Star,
   Camera,
   Image as ImageIcon,
-  MessageCircle
+  MessageCircle,
+  Globe,
+  Truck,
+  Store
 } from 'lucide-react';
 import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
 import { formatShowcaseWhatsAppOrder, getOrderWhatsAppUrl } from '../utils/whatsappOrder';
@@ -64,10 +67,33 @@ export default function Showcase({ isPublicView = false }) {
     switchBranch
   } = usePuntoNexus();
 
+  // Giro Comercial y modalidades adaptativas
+  const currentGiro = companySettings?.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
+  const isFoodBusiness = currentGiro === 'gastronomia';
+  const isOnlineStore = currentGiro === 'tienda_online' || !isFoodBusiness;
+
   // Estados de simulación y control de acceso del cliente
   const [selectedTableId, setSelectedTableId] = useState('');
   const [isTableLocked, setIsTableLocked] = useState(false);
-  const [hasNoTableMode, setHasNoTableMode] = useState(false); // Si ingresó sin mesa (general QR)
+  const [hasNoTableMode, setHasNoTableMode] = useState(!isFoodBusiness); // Si es tienda online o ingresó sin mesa
+
+  // Modalidad Tienda Online (Delivery vs Retiro en Tienda)
+  const [storeDeliveryMode, setStoreDeliveryMode] = useState('delivery'); // 'delivery' | 'pickup'
+  const [storeLinkMode, setStoreLinkMode] = useState('catalog'); // 'catalog' | 'delivery' | 'pickup'
+  const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('punto_nexus_customer_phone') || '');
+  const [shippingAddress, setShippingAddress] = useState(() => localStorage.getItem('punto_nexus_shipping_address') || '');
+
+  const handlePhoneChange = (val) => {
+    setCustomerPhone(val);
+    localStorage.setItem('punto_nexus_customer_phone', val);
+  };
+  const handleCustomerPhoneChange = handlePhoneChange;
+
+  const handleAddressChange = (val) => {
+    setShippingAddress(val);
+    localStorage.setItem('punto_nexus_shipping_address', val);
+  };
+  const handleShippingAddressChange = handleAddressChange;
 
   // Copiado & Modal de Todos los QR
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -332,13 +358,23 @@ export default function Showcase({ isPublicView = false }) {
     return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80';
   };
 
-  // Detectar mesa fijada en la URL (ej: ?mesa=1 o ?table=tbl-1) o si es QR general
+  // Detectar mesa fijada en la URL (ej: ?mesa=1) o modalidades de Tienda Online (?mode=delivery, pickup)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tableQuery = urlParams.get('mesa') || urlParams.get('table') || urlParams.get('m');
     const modeQuery = urlParams.get('mode');
 
-    if (tableQuery && tables.length > 0) {
+    if (modeQuery === 'delivery') {
+      setHasNoTableMode(true);
+      setStoreDeliveryMode('delivery');
+      setSelectedTableId('');
+      setIsTableLocked(false);
+    } else if (modeQuery === 'pickup' || modeQuery === 'takeaway') {
+      setHasNoTableMode(true);
+      setStoreDeliveryMode('pickup');
+      setSelectedTableId('');
+      setIsTableLocked(false);
+    } else if (isFoodBusiness && tableQuery && tables.length > 0) {
       const foundTable = tables.find(t => 
         t.id === tableQuery || 
         t.number.toString().toLowerCase() === tableQuery.toLowerCase() || 
@@ -353,12 +389,12 @@ export default function Showcase({ isPublicView = false }) {
         setIsTableLocked(true);
         setHasNoTableMode(false);
       }
-    } else if (modeQuery === 'takeaway' || (!tableQuery && !selectedTableId)) {
+    } else {
       setHasNoTableMode(true);
       setSelectedTableId('');
       setIsTableLocked(false);
     }
-  }, [tables]);
+  }, [tables, isFoodBusiness]);
 
   // Categorías
   const categories = useMemo(() => {
@@ -450,7 +486,15 @@ export default function Showcase({ isPublicView = false }) {
     const currentTotal = totalAmount;
     const currentNotes = orderNotes;
 
-    if (selectedTableId && !hasNoTableMode) {
+    if (!isFoodBusiness) {
+      orderType = storeDeliveryMode; // 'delivery' | 'pickup'
+      const res = await shareCart(currentBasket);
+      if (!res.error) {
+        ticketCode = res.code;
+      } else {
+        ticketCode = `ONL-${Math.floor(100 + Math.random() * 900)}`;
+      }
+    } else if (selectedTableId && !hasNoTableMode) {
       orderType = 'table';
       const targetTable = tables.find(t => t.id === selectedTableId) || tables[0];
       if (targetTable) {
@@ -489,7 +533,10 @@ export default function Showcase({ isPublicView = false }) {
       basket: currentBasket,
       totalAmount: currentTotal,
       orderNotes: currentNotes,
-      companySettings
+      companySettings,
+      customerPhone,
+      shippingAddress,
+      isOnlineStore
     });
 
     const whatsappUrl = getOrderWhatsAppUrl(ownerPhone, whatsappMsg);
@@ -519,7 +566,9 @@ export default function Showcase({ isPublicView = false }) {
         total: currentTotal,
         whatsappUrl,
         whatsappMsg,
-        ownerPhone
+        ownerPhone,
+        isOnlineStore,
+        orderType
       });
     }
 
@@ -535,14 +584,38 @@ export default function Showcase({ isPublicView = false }) {
   const baseUrl = window.location.origin + window.location.pathname;
   const targetBranchParam = activeBranchId && activeBranchId !== 'branch-matriz' ? `&b=${encodeURIComponent(activeBranchId)}` : '';
   const companyQuery = `empresa=${encodeURIComponent(companyName || 'Punto Nexus')}&c=${companySettings.company_id || 'd00de100-3333-4444-5555-666677778888'}${targetBranchParam}`;
-  const activeQrUrl = !hasNoTableMode && selectedTableObj 
-    ? `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(selectedTableObj.name)}`
-    : `${baseUrl}?${companyQuery}&mode=takeaway`;
-
   const activeBranchLabel = activeBranch?.name ? ` - Sede: ${activeBranch.name}` : '';
-  const activeQrLabel = !hasNoTableMode && selectedTableObj 
-    ? `QR Oficial ${selectedTableObj.name} (${companyName}${activeBranchLabel})`
-    : `QR Oficial Pedido Para Llevar (${companyName}${activeBranchLabel})`;
+
+  let activeQrUrl = '';
+  let activeQrLabel = '';
+  let activeQrDesc = '';
+
+  if (isFoodBusiness) {
+    activeQrUrl = !hasNoTableMode && selectedTableObj 
+      ? `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(selectedTableObj.name)}`
+      : `${baseUrl}?${companyQuery}&mode=takeaway`;
+
+    activeQrLabel = !hasNoTableMode && selectedTableObj 
+      ? `QR Oficial ${selectedTableObj.name} (${companyName}${activeBranchLabel})`
+      : `QR Oficial Pedido Para Llevar (${companyName}${activeBranchLabel})`;
+
+    activeQrDesc = 'Este es el enlace exacto asignado a esta ubicación. Puedes colocar el código QR en la estampa de la mesa.';
+  } else {
+    // Modo Tienda Online / E-Commerce
+    if (storeLinkMode === 'delivery') {
+      activeQrUrl = `${baseUrl}?${companyQuery}&mode=delivery`;
+      activeQrLabel = `QR Oficial Pedidos a Domicilio (${companyName}${activeBranchLabel})`;
+      activeQrDesc = 'Enlace directo preconfigurado para que tus clientes pidan con envío a domicilio.';
+    } else if (storeLinkMode === 'pickup') {
+      activeQrUrl = `${baseUrl}?${companyQuery}&mode=pickup`;
+      activeQrLabel = `QR Oficial Retiro en Tienda (${companyName}${activeBranchLabel})`;
+      activeQrDesc = 'Enlace para clientes que desean hacer su pedido previo y retirar en tu local.';
+    } else {
+      activeQrUrl = `${baseUrl}?${companyQuery}`;
+      activeQrLabel = `QR y Enlace de Tienda Online (${companyName}${activeBranchLabel})`;
+      activeQrDesc = 'Enlace oficial a tu tienda web. Cópialo para tu perfil de Instagram, estados de WhatsApp o volantes.';
+    }
+  }
 
   const handleCopyUrl = (url) => {
     navigator.clipboard.writeText(url);
@@ -567,10 +640,12 @@ export default function Showcase({ isPublicView = false }) {
               </div>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: 900, color: '#0f172a' }}>
-                  Generador de Links Reales & Código QR Dinámico
+                  {isFoodBusiness ? 'Generador de Links Reales & Código QR Dinámico' : 'Enlace Oficial y Códigos QR de tu Tienda Online'}
                 </div>
                 <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                  Selecciona cualquier mesa para obtener su link directo y código QR oficial escaneable.
+                  {isFoodBusiness 
+                    ? 'Selecciona cualquier mesa para obtener su link directo y código QR oficial escaneable.'
+                    : 'Comparte estos enlaces en redes sociales o genera códigos QR para tus volantes, empaques y publicidad.'}
                 </div>
               </div>
             </div>
@@ -582,30 +657,30 @@ export default function Showcase({ isPublicView = false }) {
               style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 800, padding: '7px 12px', borderRadius: '10px', borderColor: 'var(--color-cyan)', color: 'var(--color-cyan)' }}
             >
               <Grid size={14} />
-              <span>Ver Todos los QR ({tables.length + 1})</span>
+              <span>{isFoodBusiness ? `Ver Todos los QR (${tables.length + 1})` : 'Ver Todos los Enlaces y QR'}</span>
             </button>
           </div>
 
           {/* Selector de Sucursal en la barra de simulación (si hay más de 1 o para ver sede activa) */}
-          {branches && branches.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px dashed #e2e8f0' }}>
+          {branches.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginRight: '4px' }}>
-                🏢 Sucursal / Sede Activa:
+                Filtrar Sucursal / Sede:
               </span>
               {branches.map(b => {
-                const isSelected = b.id === activeBranchId;
+                const isSelected = activeBranchId === b.id;
                 return (
                   <button
                     key={b.id}
                     type="button"
-                    onClick={() => switchBranch(b.id)}
+                    onClick={() => setActiveBranchId(b.id)}
                     style={{
-                      padding: '5px 12px',
+                      padding: '5px 10px',
                       borderRadius: '8px',
-                      border: isSelected ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
-                      background: isSelected ? 'rgba(6, 182, 212, 0.12)' : '#ffffff',
-                      color: isSelected ? 'var(--color-cyan)' : '#475569',
-                      fontSize: '11.5px',
+                      border: isSelected ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      background: isSelected ? 'rgba(2, 132, 199, 0.12)' : '#ffffff',
+                      color: isSelected ? '#0284c7' : '#475569',
+                      fontSize: '11px',
                       fontWeight: isSelected ? 900 : 600,
                       cursor: 'pointer',
                       display: 'flex',
@@ -614,71 +689,156 @@ export default function Showcase({ isPublicView = false }) {
                     }}
                   >
                     <span>{b.name}</span>
-                    {b.is_main && <span style={{ fontSize: '9px', background: '#10b981', color: '#fff', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>MATRIZ</span>}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Píldoras de Selección de Mesa */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginRight: '4px' }}>
-              Selecciona Mesa / Ubicación:
-            </span>
-            
-            {tables.map((tbl, idx) => {
-              const isSelected = selectedTableId === tbl.id && !hasNoTableMode;
-              return (
-                <button
-                  key={tbl.id || tbl.number || `tbl-btn-${idx}`}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTableId(tbl.id);
-                    setIsTableLocked(true);
-                    setHasNoTableMode(false);
-                  }}
-                  style={{
-                    padding: '7px 14px',
-                    borderRadius: '10px',
-                    border: isSelected ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
-                    background: isSelected ? 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(2,132,199,0.15) 100%)' : '#ffffff',
-                    color: isSelected ? 'var(--color-cyan)' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: isSelected ? 900 : 700,
-                    cursor: 'pointer',
-                    boxShadow: isSelected ? '0 2px 8px rgba(6,182,212,0.2)' : 'none',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  🪑 {tbl.name}
-                </button>
-              );
-            })}
+          {/* Píldoras de Selección: Mesas para Restaurantes / Modos para Tienda Online */}
+          {isFoodBusiness ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginRight: '4px' }}>
+                Selecciona Mesa / Ubicación:
+              </span>
+              
+              {tables.map((tbl, idx) => {
+                const isSelected = selectedTableId === tbl.id && !hasNoTableMode;
+                return (
+                  <button
+                    key={tbl.id || tbl.number || `tbl-btn-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTableId(tbl.id);
+                      setIsTableLocked(true);
+                      setHasNoTableMode(false);
+                    }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '10px',
+                      border: isSelected ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
+                      background: isSelected ? 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(2,132,199,0.15) 100%)' : '#ffffff',
+                      color: isSelected ? 'var(--color-cyan)' : '#475569',
+                      fontSize: '12px',
+                      fontWeight: isSelected ? 900 : 700,
+                      cursor: 'pointer',
+                      boxShadow: isSelected ? '0 2px 8px rgba(6,182,212,0.2)' : 'none',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    🪑 {tbl.name}
+                  </button>
+                );
+              })}
 
-            <button
-              type="button"
-              onClick={() => {
-                setHasNoTableMode(true);
-                setSelectedTableId('');
-                setIsTableLocked(false);
-              }}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '10px',
-                border: hasNoTableMode ? '2px solid #a855f7' : '1px solid #cbd5e1',
-                background: hasNoTableMode ? 'rgba(168, 85, 247, 0.12)' : '#ffffff',
-                color: hasNoTableMode ? '#7e22ce' : '#475569',
-                fontSize: '12px',
-                fontWeight: hasNoTableMode ? 900 : 700,
-                cursor: 'pointer',
-                boxShadow: hasNoTableMode ? '0 2px 8px rgba(168,85,247,0.2)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              🛍️ Para Llevar
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHasNoTableMode(true);
+                  setSelectedTableId('');
+                  setIsTableLocked(false);
+                }}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  border: hasNoTableMode ? '2px solid #a855f7' : '1px solid #cbd5e1',
+                  background: hasNoTableMode ? 'rgba(168, 85, 247, 0.12)' : '#ffffff',
+                  color: hasNoTableMode ? '#7e22ce' : '#475569',
+                  fontSize: '12px',
+                  fontWeight: hasNoTableMode ? 900 : 700,
+                  cursor: 'pointer',
+                  boxShadow: hasNoTableMode ? '0 2px 8px rgba(168,85,247,0.2)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                🛍️ Para Llevar
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginRight: '4px' }}>
+                Tipo de Enlace / Código QR:
+              </span>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setStoreLinkMode('catalog');
+                  setStoreDeliveryMode('pickup');
+                }}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  border: storeLinkMode === 'catalog' ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
+                  background: storeLinkMode === 'catalog' ? 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(2,132,199,0.15) 100%)' : '#ffffff',
+                  color: storeLinkMode === 'catalog' ? 'var(--color-cyan)' : '#475569',
+                  fontSize: '12px',
+                  fontWeight: storeLinkMode === 'catalog' ? 900 : 700,
+                  cursor: 'pointer',
+                  boxShadow: storeLinkMode === 'catalog' ? '0 2px 8px rgba(6,182,212,0.2)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Globe size={14} />
+                <span>Catálogo Web Principal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStoreLinkMode('delivery');
+                  setStoreDeliveryMode('delivery');
+                }}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  border: storeLinkMode === 'delivery' ? '2px solid #10b981' : '1px solid #cbd5e1',
+                  background: storeLinkMode === 'delivery' ? 'rgba(16, 185, 129, 0.15)' : '#ffffff',
+                  color: storeLinkMode === 'delivery' ? '#059669' : '#475569',
+                  fontSize: '12px',
+                  fontWeight: storeLinkMode === 'delivery' ? 900 : 700,
+                  cursor: 'pointer',
+                  boxShadow: storeLinkMode === 'delivery' ? '0 2px 8px rgba(16,185,129,0.2)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Truck size={14} />
+                <span>Pedidos con Envío a Domicilio</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStoreLinkMode('pickup');
+                  setStoreDeliveryMode('pickup');
+                }}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  border: storeLinkMode === 'pickup' ? '2px solid #a855f7' : '1px solid #cbd5e1',
+                  background: storeLinkMode === 'pickup' ? 'rgba(168, 85, 247, 0.15)' : '#ffffff',
+                  color: storeLinkMode === 'pickup' ? '#7e22ce' : '#475569',
+                  fontSize: '12px',
+                  fontWeight: storeLinkMode === 'pickup' ? 900 : 700,
+                  cursor: 'pointer',
+                  boxShadow: storeLinkMode === 'pickup' ? '0 2px 8px rgba(168,85,247,0.2)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Store size={14} />
+                <span>Retiro en Tienda / Local</span>
+              </button>
+            </div>
+          )}
 
           {/* ── TARJETA DEL LINK REAL Y CÓDIGO QR GENERADO EN TIEMPO REAL ── */}
           <div style={{
@@ -726,7 +886,7 @@ export default function Showcase({ isPublicView = false }) {
               </div>
 
               <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 10px 0' }}>
-                Este es el enlace exacto asignado a esta ubicación. Puedes colocar el código QR en la estampa de la mesa.
+                {activeQrDesc}
               </p>
 
               {/* Input de la URL */}
@@ -815,7 +975,7 @@ export default function Showcase({ isPublicView = false }) {
                     textTransform: 'uppercase', 
                     letterSpacing: '0.04em' 
                   }}>
-                    🟢 Abierto • Menú Digital QR
+                    {isFoodBusiness ? '🟢 Abierto • Menú Digital QR' : '🛍️ Tienda Online Oficial'}
                   </span>
                   <span style={{ 
                     fontSize: '10px', 
@@ -839,7 +999,9 @@ export default function Showcase({ isPublicView = false }) {
                   {companyName || 'Punto Nexus'}
                 </h2>
                 <p style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px', margin: 0 }}>
-                  Explora nuestra carta digital y realiza tu pedido directo al instante.
+                  {isFoodBusiness 
+                    ? 'Explora nuestra carta digital y realiza tu pedido directo al instante.'
+                    : 'Explora nuestro catálogo exclusivo, haz tu pedido y recibe atención directa.'}
                 </p>
               </div>
             </div>
@@ -852,9 +1014,82 @@ export default function Showcase({ isPublicView = false }) {
             </div>
           </div>
 
-          {/* ── BANNER DE UBICACIÓN (REGLA DEL CLIENTE: FIJADO Y SIN ACCESO A CAMBIAR) ── */}
+          {/* ── BANNER DE UBICACIÓN / MODALIDAD ── */}
           <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            {!hasNoTableMode && selectedTableObj ? (
+            {!isFoodBusiness ? (
+              <div style={{
+                background: storeDeliveryMode === 'delivery' ? 'rgba(16, 185, 129, 0.14)' : 'rgba(6, 182, 212, 0.14)',
+                border: `1px solid ${storeDeliveryMode === 'delivery' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(6, 182, 212, 0.35)'}`,
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {storeDeliveryMode === 'delivery' ? (
+                    <Truck size={20} style={{ color: '#4ade80' }} />
+                  ) : (
+                    <Store size={20} style={{ color: '#38bdf8' }} />
+                  )}
+                  <div>
+                    <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#ffffff', display: 'block' }}>
+                      {storeDeliveryMode === 'delivery' ? '🛵 Pedido con Envío a Domicilio' : '🏬 Pedido con Retiro en Tienda'}
+                    </span>
+                    <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                      {storeDeliveryMode === 'delivery'
+                        ? 'Envíos directos con despacho a tu dirección.'
+                        : 'Puedes retirar tu compra directamente en nuestra sede.'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStoreDeliveryMode('delivery')}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: storeDeliveryMode === 'delivery' ? '#10b981' : 'rgba(255,255,255,0.12)',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Truck size={12} />
+                    <span>Envío</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStoreDeliveryMode('pickup')}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: storeDeliveryMode === 'pickup' ? 'var(--color-cyan)' : 'rgba(255,255,255,0.12)',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Store size={12} />
+                    <span>Retiro</span>
+                  </button>
+                </div>
+              </div>
+            ) : !hasNoTableMode && selectedTableObj ? (
               /* ESTADO MESA FIJADA (READ-ONLY) */
               <div style={{
                 background: 'rgba(16, 185, 129, 0.12)',
@@ -1239,7 +1474,7 @@ export default function Showcase({ isPublicView = false }) {
         }}>
           <div>
             <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.4px' }}>
-              Resumen ({totalItemsCount} ítems) • {!hasNoTableMode && selectedTableObj ? selectedTableObj.name : 'Para Llevar'}
+              Resumen ({totalItemsCount} ítems) • {!isFoodBusiness ? (storeDeliveryMode === 'delivery' ? '🛵 Envío a Domicilio' : '🏬 Retiro en Tienda') : (!hasNoTableMode && selectedTableObj ? selectedTableObj.name : 'Para Llevar')}
             </span>
             <div style={{ marginTop: '2px' }}>
               <DualCurrencyDisplay amount={totalAmount} fontSize="18px" primaryColor={companySettings.price_color || companySettings.accent_color || '#38bdf8'} showSwap={true} />
@@ -1273,7 +1508,7 @@ export default function Showcase({ isPublicView = false }) {
       )}
 
       {/* ========================================================================= */}
-      {/* 🖼️ MODAL DE TODOS LOS CÓDIGOS QR Y ESTAMPAS DE MESAS IMPRIMIBLES 🖼️ */}
+      {/* 🖼️ MODAL DE TODOS LOS CÓDIGOS QR Y ENLACES IMPRIMIBLES 🖼️ */}
       {/* ========================================================================= */}
       {showAllQrsModal && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
@@ -1283,10 +1518,12 @@ export default function Showcase({ isPublicView = false }) {
               <div>
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <QrCode size={22} style={{ color: 'var(--color-cyan)' }} />
-                  Estampas y Códigos QR del Establecimiento
+                  {isFoodBusiness ? 'Estampas y Códigos QR del Establecimiento' : 'Enlaces y Códigos QR de tu Tienda Online'}
                 </h3>
                 <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  Imprime estas estampas o copia los enlaces para colocar los códigos QR en cada mesa del salón.
+                  {isFoodBusiness 
+                    ? 'Imprime estas estampas o copia los enlaces para colocar los códigos QR en cada mesa del salón.'
+                    : 'Copia los enlaces para compartir con tus clientes o imprime los códigos QR para tus folletos y empaques.'}
                 </p>
               </div>
               
@@ -1298,7 +1535,7 @@ export default function Showcase({ isPublicView = false }) {
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '8px 14px' }}
                 >
                   <Printer size={16} />
-                  <span>Imprimir Estampas</span>
+                  <span>{isFoodBusiness ? 'Imprimir Estampas' : 'Imprimir Códigos QR'}</span>
                 </button>
                 <button className="modal-close" onClick={() => setShowAllQrsModal(false)}>
                   <X size={20} />
@@ -1308,58 +1545,139 @@ export default function Showcase({ isPublicView = false }) {
 
             {/* Grid de QR Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '16px', maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
-              {/* Opción Para Llevar */}
-              <div style={{ background: '#f8fafc', border: '2px dashed #a855f7', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(168, 85, 247, 0.15)', color: '#7e22ce', padding: '3px 10px', borderRadius: '99px' }}>
-                  🛍️ PARA LLEVAR / BARRA
-                </span>
-                <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${baseUrl}?${companyQuery}&mode=takeaway`)}`} 
-                    alt="QR Para Llevar"
-                    style={{ width: '130px', height: '130px' }}
-                  />
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
-                  {baseUrl}?{companyQuery}&mode=takeaway
-                </div>
-                <button
-                  onClick={() => handleCopyUrl(`${baseUrl}?${companyQuery}&mode=takeaway`)}
-                  className="btn-secondary"
-                  style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '6px' }}
-                >
-                  Copiar Enlace
-                </button>
-              </div>
-
-              {/* Mesas del salón */}
-              {tables.map((tbl, idx) => {
-                const tableUrl = `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(tbl.name)}`;
-                return (
-                  <div key={tbl.id || tbl.number || `tbl-qr-${idx}`} style={{ background: '#f8fafc', border: '2px solid var(--color-cyan)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 900, background: 'rgba(6, 182, 212, 0.15)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '99px' }}>
-                      🪑 {tbl.name}
+              {isFoodBusiness ? (
+                <>
+                  {/* Opción Para Llevar */}
+                  <div style={{ background: '#f8fafc', border: '2px dashed #a855f7', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(168, 85, 247, 0.15)', color: '#7e22ce', padding: '3px 10px', borderRadius: '99px' }}>
+                      🛍️ PARA LLEVAR / BARRA
                     </span>
                     <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(tableUrl)}`} 
-                        alt={`QR ${tbl.name}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${baseUrl}?${companyQuery}&mode=takeaway`)}`} 
+                        alt="QR Para Llevar"
                         style={{ width: '130px', height: '130px' }}
                       />
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
-                      {tableUrl}
+                      {baseUrl}?{companyQuery}&mode=takeaway
                     </div>
                     <button
-                      onClick={() => handleCopyUrl(tableUrl)}
+                      onClick={() => handleCopyUrl(`${baseUrl}?${companyQuery}&mode=takeaway`)}
                       className="btn-secondary"
                       style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '6px' }}
                     >
                       Copiar Enlace
                     </button>
                   </div>
-                );
-              })}
+
+                  {/* Mesas del salón */}
+                  {tables.map((tbl, idx) => {
+                    const tableUrl = `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(tbl.name)}`;
+                    return (
+                      <div key={tbl.id || tbl.number || `tbl-qr-${idx}`} style={{ background: '#f8fafc', border: '2px solid var(--color-cyan)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 900, background: 'rgba(6, 182, 212, 0.15)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '99px' }}>
+                          🪑 {tbl.name}
+                        </span>
+                        <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
+                          <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(tableUrl)}`} 
+                            alt={`QR ${tbl.name}`}
+                            style={{ width: '130px', height: '130px' }}
+                          />
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
+                          {tableUrl}
+                        </div>
+                        <button
+                          onClick={() => handleCopyUrl(tableUrl)}
+                          className="btn-secondary"
+                          style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '6px' }}
+                        >
+                          Copiar Enlace
+                        </button>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  {/* Tarjeta 1: Catálogo Web Principal */}
+                  <div style={{ background: '#f8fafc', border: '2px solid var(--color-cyan)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(6, 182, 212, 0.15)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Globe size={13} />
+                      CATÁLOGO WEB
+                    </span>
+                    <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${baseUrl}?${companyQuery}`)}`} 
+                        alt="QR Catálogo Web"
+                        style={{ width: '130px', height: '130px' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
+                      {baseUrl}?{companyQuery}
+                    </div>
+                    <button
+                      onClick={() => handleCopyUrl(`${baseUrl}?${companyQuery}`)}
+                      className="btn-primary"
+                      style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '7px' }}
+                    >
+                      Copiar Enlace
+                    </button>
+                  </div>
+
+                  {/* Tarjeta 2: Pedidos con Envío a Domicilio */}
+                  <div style={{ background: '#f8fafc', border: '2px solid #10b981', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(16, 185, 129, 0.15)', color: '#059669', padding: '3px 10px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Truck size={13} />
+                      ENVÍO A DOMICILIO
+                    </span>
+                    <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${baseUrl}?${companyQuery}&mode=delivery`)}`} 
+                        alt="QR Envío a Domicilio"
+                        style={{ width: '130px', height: '130px' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
+                      {baseUrl}?{companyQuery}&mode=delivery
+                    </div>
+                    <button
+                      onClick={() => handleCopyUrl(`${baseUrl}?${companyQuery}&mode=delivery`)}
+                      className="btn-primary"
+                      style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '7px', background: '#10b981', borderColor: '#10b981' }}
+                    >
+                      Copiar Enlace
+                    </button>
+                  </div>
+
+                  {/* Tarjeta 3: Retiro en Tienda */}
+                  <div style={{ background: '#f8fafc', border: '2px solid #a855f7', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(168, 85, 247, 0.15)', color: '#7e22ce', padding: '3px 10px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Store size={13} />
+                      RETIRO EN TIENDA
+                    </span>
+                    <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${baseUrl}?${companyQuery}&mode=pickup`)}`} 
+                        alt="QR Retiro en Tienda"
+                        style={{ width: '130px', height: '130px' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px', wordBreak: 'break-all' }}>
+                      {baseUrl}?{companyQuery}&mode=pickup
+                    </div>
+                    <button
+                      onClick={() => handleCopyUrl(`${baseUrl}?${companyQuery}&mode=pickup`)}
+                      className="btn-primary"
+                      style={{ width: '100%', fontSize: '11px', fontWeight: 800, padding: '7px', background: '#a855f7', borderColor: '#a855f7' }}
+                    >
+                      Copiar Enlace
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
           </div>
@@ -1383,12 +1701,64 @@ export default function Showcase({ isPublicView = false }) {
               </button>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>Ubicación / Destino:</span>
-              <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--color-cyan)' }}>
-                {!hasNoTableMode && selectedTableObj ? `🍽️ ${selectedTableObj.name}` : '🛍️ Para Llevar / Caja'}
-              </span>
-            </div>
+            {!isFoodBusiness ? (
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '12px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Modalidad de Entrega:
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStoreDeliveryMode('delivery')}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: storeDeliveryMode === 'delivery' ? '2px solid #10b981' : '1px solid #cbd5e1',
+                      background: storeDeliveryMode === 'delivery' ? 'rgba(16, 185, 129, 0.12)' : '#ffffff',
+                      color: storeDeliveryMode === 'delivery' ? '#059669' : '#475569',
+                      fontWeight: storeDeliveryMode === 'delivery' ? 900 : 700,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Truck size={15} />
+                    <span>Envío a Domicilio</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStoreDeliveryMode('pickup')}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: storeDeliveryMode === 'pickup' ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
+                      background: storeDeliveryMode === 'pickup' ? 'rgba(6, 182, 212, 0.12)' : '#ffffff',
+                      color: storeDeliveryMode === 'pickup' ? 'var(--color-cyan)' : '#475569',
+                      fontWeight: storeDeliveryMode === 'pickup' ? 900 : 700,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Store size={15} />
+                    <span>Retiro en Tienda</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>Ubicación / Destino:</span>
+                <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--color-cyan)' }}>
+                  {!hasNoTableMode && selectedTableObj ? `🍽️ ${selectedTableObj.name}` : '🛍️ Para Llevar / Caja'}
+                </span>
+              </div>
+            )}
 
             <div style={{ marginBottom: '16px' }}>
               <label className="form-label" style={{ marginBottom: '8px' }}>Resumen de Consumo</label>
@@ -1488,34 +1858,93 @@ export default function Showcase({ isPublicView = false }) {
               </div>
             </div>
 
-            {!hasNoTableMode && selectedTableObj && (
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label" style={{ fontWeight: 800 }}>👤 Nombre del Participante (¿Quién pide?)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ej: Juan, María, Carlos..."
-                  value={participantName}
-                  onChange={(e) => handleParticipantNameChange(e.target.value)}
-                  style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
-                />
-                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                  Este nombre se usará en la mesa para identificar tus consumos y cobrar por separado en Caja.
-                </span>
-              </div>
-            )}
+            {!isFoodBusiness ? (
+              <>
+                <div className="form-group" style={{ marginBottom: '14px' }}>
+                  <label className="form-label" style={{ fontWeight: 800 }}>👤 Nombre Completo del Cliente (*)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: Carlos Mendoza"
+                    value={participantName}
+                    onChange={(e) => handleParticipantNameChange(e.target.value)}
+                    style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
+                  />
+                </div>
 
-            <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label className="form-label">Nota Especial para la Cocina (Opcional)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Ej: Sin cebolla, extra salsa, papas bien crujientes..."
-                value={orderNotes}
-                onChange={(e) => setOrderNotes(e.target.value)}
-                style={{ fontSize: '12px' }}
-              />
-            </div>
+                <div className="form-group" style={{ marginBottom: '14px' }}>
+                  <label className="form-label" style={{ fontWeight: 800 }}>📱 Teléfono / WhatsApp de Contacto (*)</label>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    placeholder="Ej: 0414-1234567"
+                    value={customerPhone}
+                    onChange={(e) => handleCustomerPhoneChange(e.target.value)}
+                    style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Te contactaremos a este número para coordinar el pago y entrega.
+                  </span>
+                </div>
+
+                {storeDeliveryMode === 'delivery' && (
+                  <div className="form-group" style={{ marginBottom: '14px' }}>
+                    <label className="form-label" style={{ fontWeight: 800 }}>📍 Dirección Exacta de Entrega & Punto de Referencia (*)</label>
+                    <textarea
+                      className="form-input"
+                      rows={2}
+                      placeholder="Ej: Av. 5 de Julio, Edf. Rosalba, Piso 3, Apto 3B. Al lado de la panadería..."
+                      value={shippingAddress}
+                      onChange={(e) => handleShippingAddressChange(e.target.value)}
+                      style={{ fontSize: '12.5px', resize: 'vertical' }}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label className="form-label">📝 Notas Adicionales del Pedido (Opcional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: Envolver para regalo, entregar después de las 3pm..."
+                    value={orderNotes}
+                    onChange={(e) => setOrderNotes(e.target.value)}
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {!hasNoTableMode && selectedTableObj && (
+                  <div className="form-group" style={{ marginBottom: '14px' }}>
+                    <label className="form-label" style={{ fontWeight: 800 }}>👤 Nombre del Participante (¿Quién pide?)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej: Juan, María, Carlos..."
+                      value={participantName}
+                      onChange={(e) => handleParticipantNameChange(e.target.value)}
+                      style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
+                    />
+                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                      Este nombre se usará en la mesa para identificar tus consumos y cobrar por separado en Caja.
+                    </span>
+                  </div>
+                )}
+
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label className="form-label">Nota Especial para la Cocina (Opcional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: Sin cebolla, extra salsa, papas bien crujientes..."
+                    value={orderNotes}
+                    onChange={(e) => setOrderNotes(e.target.value)}
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
+              </>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
               <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-secondary)' }}>TOTAL FINAL</span>
@@ -1535,11 +1964,17 @@ export default function Showcase({ isPublicView = false }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                background: !isFoodBusiness ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : undefined,
+                boxShadow: !isFoodBusiness ? '0 4px 16px rgba(22, 163, 74, 0.35)' : undefined
               }}
             >
-              <Send size={16} />
-              <span>{processingOrder ? 'Procesando...' : 'CONFIRMAR Y ENVIAR PEDIDO 🚀'}</span>
+              {!isFoodBusiness ? <MessageSquare size={18} /> : <Send size={16} />}
+              <span>
+                {processingOrder 
+                  ? 'Procesando...' 
+                  : (!isFoodBusiness ? 'CONFIRMAR Y ENVIAR POR WHATSAPP 🚀' : 'CONFIRMAR Y ENVIAR PEDIDO 🚀')}
+              </span>
             </button>
 
           </div>
@@ -1641,17 +2076,25 @@ export default function Showcase({ isPublicView = false }) {
         const codeStr = typeof generatedCode === 'object' ? generatedCode.code : generatedCode;
         const codeWhatsappUrl = typeof generatedCode === 'object' ? generatedCode.whatsappUrl : null;
         const codeWhatsappMsg = typeof generatedCode === 'object' ? generatedCode.whatsappMsg : null;
+        const isOnline = typeof generatedCode === 'object' ? generatedCode.isOnlineStore : false;
+        const genOrderType = typeof generatedCode === 'object' ? generatedCode.orderType : 'takeaway';
 
         return (
           <div className="modal-overlay" style={{ zIndex: 9999 }}>
             <div className="modal-content glass-panel" style={{ maxWidth: '440px', textAlign: 'center', padding: '30px 24px', background: '#ffffff' }}>
-              <CheckCircle2 size={40} style={{ color: 'var(--color-cyan)', margin: '0 auto 12px' }} />
-              <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0 }}>¡Código de Retiro Generado!</h3>
+              <CheckCircle2 size={40} style={{ color: isOnline ? '#16a34a' : 'var(--color-cyan)', margin: '0 auto 12px' }} />
+              <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                {isOnline ? '¡Pedido Registrado con Éxito!' : '¡Código de Retiro Generado!'}
+              </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Tu orden ha sido registrada. Muestra este código o envíalo por WhatsApp:
+                {isOnline
+                  ? (genOrderType === 'delivery'
+                      ? 'Tu pedido con despacho a domicilio está listo. Coordina el pago y entrega por WhatsApp:'
+                      : 'Tu pedido para retiro en tienda está listo. Coordina el pago y entrega por WhatsApp:')
+                  : 'Tu orden ha sido registrada. Muestra este código o envíalo por WhatsApp:'}
               </p>
 
-              <div style={{ background: '#f0f9ff', border: '2px dashed var(--color-cyan)', borderRadius: '16px', padding: '14px', margin: '16px 0', fontFamily: 'monospace', fontSize: '34px', fontWeight: 900, color: 'var(--color-cyan)', letterSpacing: '3px' }}>
+              <div style={{ background: isOnline ? '#f0fdf4' : '#f0f9ff', border: `2px dashed ${isOnline ? '#16a34a' : 'var(--color-cyan)'}`, borderRadius: '16px', padding: '14px', margin: '16px 0', fontFamily: 'monospace', fontSize: '34px', fontWeight: 900, color: isOnline ? '#16a34a' : 'var(--color-cyan)', letterSpacing: '3px' }}>
                 {codeStr}
               </div>
 
@@ -1714,7 +2157,7 @@ export default function Showcase({ isPublicView = false }) {
                 className="btn-primary"
                 style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}
               >
-                ¡Entendido! Volver al Menú
+                {isOnline ? '¡Entendido! Volver a la Tienda' : '¡Entendido! Volver al Menú'}
               </button>
             </div>
           </div>

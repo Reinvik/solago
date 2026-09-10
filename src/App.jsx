@@ -12,7 +12,7 @@ import UserProfileModal from './components/UserProfileModal';
 import TablesModule from './components/TablesModule';
 import FinanceModule from './components/FinanceModule';
 import BranchesControl from './components/BranchesControl';
-import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function AppContent() {
   const { user, companyName, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate } = usePuntoNexus();
@@ -77,6 +77,9 @@ function AppContent() {
   );
   const isAdmin = !user?.role || isNexusOwner || ['admin', 'administrador', 'gerente'].includes(String(user.role).toLowerCase());
   const hasBranches = Array.isArray(branches) && branches.length > 0;
+  const currentGiro = companySettings?.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
+  const isGastronomia = currentGiro === 'gastronomia';
+  const isOnlineStore = currentGiro === 'tienda_online' || !isGastronomia;
 
   const isModuleVisible = (moduleKey) => {
     if (!user) return true;
@@ -269,7 +272,7 @@ function AppContent() {
             </a>
           )}
 
-          {isModuleVisible('tables') && (!companySettings?.business_type || companySettings?.business_type === 'gastronomia') && (
+          {isModuleVisible('tables') && isGastronomia && (
             <a 
               className={`sidebar-item ${activeTab === 'tables' ? 'active' : ''}`}
               onClick={() => { setActiveTab('tables'); if(window.innerWidth <= 768) setMenuCollapsed(true); }}
@@ -339,11 +342,11 @@ function AppContent() {
               className={`sidebar-item ${activeTab === 'showcase' ? 'active' : ''}`}
               onClick={() => { setActiveTab('showcase'); if(window.innerWidth <= 768) setMenuCollapsed(true); }}
               style={{ borderTop: '1px dashed rgba(255,255,255,0.1)', marginTop: '8px', paddingTop: '12px' }}
-              title="Vitrina Cliente"
-              data-title="Vitrina Cliente"
+              title={isOnlineStore ? "Tienda Online" : "Vitrina Cliente"}
+              data-title={isOnlineStore ? "Tienda Online" : "Vitrina Cliente"}
             >
-              <Eye size={24} />
-              <span>Vitrina Cliente</span>
+              {isOnlineStore ? <Globe size={24} /> : <Eye size={24} />}
+              <span>{isOnlineStore ? "Tienda Online" : "Vitrina Cliente"}</span>
             </a>
           )}
         </nav>
@@ -631,7 +634,7 @@ function AppContent() {
         </header>
 
         {/* Banner de aviso de Cocina ("Alerta de Cocina - Mayor Atraso") */}
-        {kitchenAlertInfo?.hasAlert && activeTab !== 'tables' && (
+        {kitchenAlertInfo?.hasAlert && isGastronomia && activeTab !== 'tables' && (
           <div 
             className={`alert-banner ${kitchenAlertInfo.maxDelayMins >= 15 ? 'red-glow' : 'amber-glow'}`}
             style={{
@@ -662,7 +665,7 @@ function AppContent() {
           </div>
         )}
         {/* Banner de aviso de Platillos Listos para Servir (Verde Emerald Glow) */}
-        {kitchenReadyInfo?.hasReadyAlert && activeTab !== 'tables' && (
+        {kitchenReadyInfo?.hasReadyAlert && isGastronomia && activeTab !== 'tables' && (
           <div 
             className="alert-banner emerald-glow"
             style={{

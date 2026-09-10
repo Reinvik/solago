@@ -7,6 +7,14 @@ import { isSoundEnabled, setSoundEnabled, playSound } from '../utils/soundEffect
 
 const GIROS_COMERCIALES = [
   { 
+    id: 'tienda_online', 
+    name: 'Tienda Online / E-Commerce', 
+    icon: Globe, 
+    color: '#0284c7', 
+    gradient: 'linear-gradient(135deg, #38bdf8, #0284c7)',
+    desc: 'Catálogo web interactivo, ventas online, envíos a domicilio, pedidos a WhatsApp y retiro en tienda. Sin comandero de mesas ni cocina.'
+  },
+  { 
     id: 'boutique', 
     name: 'Boutique', 
     icon: ShoppingBag, 
@@ -67,8 +75,8 @@ const GIROS_COMERCIALES = [
 export default function Settings({ onOpenProfileModal }) {
   const { companySettings, updateCompanySettings, companyName, setCompanyName, updateCompanyName, syncExchangeRate, rateHistory, bcvRate, paraleloRate, euroRate, bcvLastUpdated, loading, branches = [], activeBranchId, switchBranch, addBranch } = usePuntoNexus();
 
-  const currentGiro = companySettings.business_type || 'gastronomia';
-  const selectedGiroObj = GIROS_COMERCIALES.find(g => g.id === currentGiro) || GIROS_COMERCIALES[3];
+  const currentGiro = companySettings.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
+  const selectedGiroObj = GIROS_COMERCIALES.find(g => g.id === currentGiro) || GIROS_COMERCIALES[0];
 
   // ─── Sincronización manual de sucursales desde Supabase ───
   const [syncingBranches, setSyncingBranches] = useState(false);
@@ -393,7 +401,12 @@ export default function Settings({ onOpenProfileModal }) {
                 key={giro.id}
                 type="button"
                 onClick={async () => {
-                  const res = await updateCompanySettings({ business_type: giro.id });
+                  const updates = { business_type: giro.id };
+                  if (giro.id !== 'gastronomia') {
+                    const userMods = companySettings.user_modules || {};
+                    updates.user_modules = { ...userMods, tables: false };
+                  }
+                  const res = await updateCompanySettings(updates);
                   if (res.error) alert(res.error);
                 }}
                 style={{

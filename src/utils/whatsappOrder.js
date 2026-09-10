@@ -8,13 +8,16 @@ export const formatShowcaseWhatsAppOrder = ({
   companyName = 'SoLago',
   activeBranch = null,
   participantName = '',
-  orderType = 'takeaway', // 'table' | 'takeaway'
+  orderType = 'takeaway', // 'table' | 'takeaway' | 'delivery' | 'pickup'
   tableName = '',
   ticketCode = '',
   basket = [],
   totalAmount = 0,
   orderNotes = '',
-  companySettings = {}
+  companySettings = {},
+  customerPhone = '',
+  shippingAddress = '',
+  isOnlineStore = false
 }) => {
   const compName = companyName || companySettings.company_name || 'SoLago';
   const branchText = activeBranch?.name ? ` (Sede: ${activeBranch.name})` : '';
@@ -28,18 +31,30 @@ export const formatShowcaseWhatsAppOrder = ({
     timeStyle: 'short'
   });
 
-  let message = `🛒 *NUEVO PEDIDO DESDE VITRINA VIRTUAL*\n`;
+  const headerTitle = isOnlineStore ? `🌐 *NUEVO PEDIDO DESDE TIENDA ONLINE*` : `🛒 *NUEVO PEDIDO DESDE VITRINA VIRTUAL*`;
+  let message = `${headerTitle}\n`;
   message += `🏢 *Establecimiento:* ${compName}${branchText}\n`;
   message += `👤 *Cliente:* ${client}\n`;
 
+  if (customerPhone && customerPhone.trim()) {
+    message += `📱 *Teléfono / WhatsApp:* ${customerPhone.trim()}\n`;
+  }
+
   if (orderType === 'table' && tableName) {
     message += `📍 *Mesa:* ${tableName}\n`;
+  } else if (orderType === 'delivery') {
+    message += `🛵 *Modalidad:* Envío a Domicilio (Delivery)\n`;
+    if (shippingAddress && shippingAddress.trim()) {
+      message += `🏠 *Dirección de Entrega:* ${shippingAddress.trim()}\n`;
+    }
+  } else if (orderType === 'pickup') {
+    message += `🏬 *Modalidad:* Retiro en Tienda / Local\n`;
   } else {
     message += `🛍️ *Modalidad:* Para Llevar / Retiro en Barra\n`;
   }
 
   if (ticketCode) {
-    message += `🎫 *Código de Retiro / Ticket:* *${ticketCode}*\n`;
+    message += `🎫 *Código de Ticket / Pedido:* *${ticketCode}*\n`;
   }
   message += `🕒 *Fecha:* ${nowStr}\n\n`;
 

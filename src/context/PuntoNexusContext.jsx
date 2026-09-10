@@ -133,11 +133,11 @@ export const PuntoNexusProvider = ({ children }) => {
     name: 'Matriz Principal',
     code: 'MATRIZ-01',
     is_main: true,
-    business_type: 'gastronomia',
+    business_type: (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia'),
     address: 'Sede Central Principal',
     phone: '',
     manager: 'Administración General'
-  }), []);
+  }), [companyName]);
 
   const [branches, setBranches] = useState(() => {
     const keysToTry = [
@@ -275,6 +275,7 @@ export const PuntoNexusProvider = ({ children }) => {
       logo_url: '/logo.png',
       brand_color: '#0f172a',
       accent_color: '#06b6d4',
+      business_type: cleanParsed.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia'),
       enabled_modules: ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase'],
       ...cleanParsed
     };
@@ -1246,7 +1247,7 @@ export const PuntoNexusProvider = ({ children }) => {
     const savedBranchSettings = localStorage.getItem(branchSettingsKey);
     let branchSettings = savedBranchSettings ? JSON.parse(savedBranchSettings) : {};
 
-    const targetGiro = branchSettings.business_type || targetBranch.business_type || (targetBranch.is_main ? 'gastronomia' : 'alimentos');
+    const targetGiro = branchSettings.business_type || targetBranch.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : (targetBranch.is_main ? 'gastronomia' : 'alimentos'));
 
     const updatedSettings = {
       ...companySettings,
