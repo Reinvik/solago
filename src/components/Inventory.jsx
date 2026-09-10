@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
-import { Plus, Edit3, Trash2, ShieldAlert, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
 
 export default function Inventory() {
   const { 
@@ -85,7 +86,10 @@ export default function Inventory() {
     });
   };
 
-  // Procesar archivo seleccionado o arrastrado
+  // Estados y métodos para multi-fotos de productos
+  const [urlImageInput, setUrlImageInput] = useState('');
+
+  // Procesar archivo seleccionado o arrastrado (soporta múltiples fotos sucesivas)
   const handleProductImageFileSelect = async (file) => {
     if (!file) return;
     if (!file.type || !file.type.startsWith('image/')) {
@@ -96,7 +100,17 @@ export default function Inventory() {
     setCompressingImage(true);
     try {
       const result = await compressImage(file, 600, 600, 0.75);
-      setProductForm(prev => ({ ...prev, image_url: result.dataUrl }));
+      setProductForm(prev => {
+        const currentImgs = Array.isArray(prev.images) && prev.images.length > 0
+          ? [...prev.images]
+          : (prev.image_url ? [prev.image_url] : []);
+        const nextImgs = [...currentImgs, result.dataUrl];
+        return {
+          ...prev,
+          images: nextImgs,
+          image_url: nextImgs[0] || result.dataUrl
+        };
+      });
       const savingsPct = result.originalSize > 0 
         ? Math.max(0, Math.round(((result.originalSize - result.compressedSize) / result.originalSize) * 100))
         : 0;
@@ -111,7 +125,61 @@ export default function Inventory() {
       alert("No se pudo procesar la imagen. Intenta con otra imagen o un enlace URL.");
     } finally {
       setCompressingImage(false);
+      if (productImageInputRef.current) productImageInputRef.current.value = '';
     }
+  };
+
+  // Agregar foto mediante enlace URL
+  const handleAddImageUrl = () => {
+    const trimmed = urlImageInput.trim();
+    if (!trimmed) return;
+    setProductForm(prev => {
+      const currentImgs = Array.isArray(prev.images) && prev.images.length > 0
+        ? [...prev.images]
+        : (prev.image_url ? [prev.image_url] : []);
+      if (currentImgs.includes(trimmed)) return prev;
+      const nextImgs = [...currentImgs, trimmed];
+      return {
+        ...prev,
+        images: nextImgs,
+        image_url: nextImgs[0] || trimmed
+      };
+    });
+    setUrlImageInput('');
+  };
+
+  // Quitar foto en un índice específico
+  const handleRemoveImageAtIndex = (indexToRemove) => {
+    setProductForm(prev => {
+      const currentImgs = Array.isArray(prev.images) && prev.images.length > 0
+        ? [...prev.images]
+        : (prev.image_url ? [prev.image_url] : []);
+      const nextImgs = currentImgs.filter((_, idx) => idx !== indexToRemove);
+      return {
+        ...prev,
+        images: nextImgs,
+        image_url: nextImgs[0] || ''
+      };
+    });
+    setImageStats(null);
+  };
+
+  // Definir una foto como portada / principal (mover al índice 0)
+  const handleSetPrimaryImage = (indexToPrimary) => {
+    setProductForm(prev => {
+      const currentImgs = Array.isArray(prev.images) && prev.images.length > 0
+        ? [...prev.images]
+        : (prev.image_url ? [prev.image_url] : []);
+      if (indexToPrimary <= 0 || indexToPrimary >= currentImgs.length) return prev;
+      const target = currentImgs[indexToPrimary];
+      const remaining = currentImgs.filter((_, idx) => idx !== indexToPrimary);
+      const nextImgs = [target, ...remaining];
+      return {
+        ...prev,
+        images: nextImgs,
+        image_url: nextImgs[0]
+      };
+    });
   };
 
   // --- DESCARGAR PLANTILLA EXCEL ---
@@ -193,8 +261,9 @@ export default function Inventory() {
           return;
         }
 
-        // Tasa de IVA base del sistema (ej: 0.16 = 16%)
-        const defaultTaxRate = companySettings?.tax_rate ?? 0.16;
+        // Tasa de IVA base del sistema (ej: 0.16 = 16% o 0 si la empresa opera sin IVA)
+        const isTaxFreeCompany = companySettings?.tax_enabled === false || Number(companySettings?.tax_rate) === 0;
+        const defaultTaxRate = isTaxFreeCompany ? 0 : (companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null ? Number(companySettings.tax_rate) : 0.16);
 
         let successCount = 0;
         let errorCount = 0;
@@ -209,8 +278,10 @@ export default function Inventory() {
 
           const costPrice = Number(row["Costo Unitario"] || row["costo_unitario"] || row["Costo"] || row["cost_price"]) || 0;
           const sellPrice = Number(row["Precio Venta"] || row["precio_venta"] || row["Precio"] || row["sell_price"]) || 0;
-          const stock = Number(row["Cantidad / Stock"] || row["Stock"] || row["stock"] || row["cantidad"]) || 0;
-          const minStock = Number(row["Stock Mínimo Alerta"] || row["min_stock"] || row["Stock Minimo"]) || 5;
+          const rawMinStock = row["Stock Mínimo Alerta"] ?? row["min_stock"] ?? row["Stock Minimo"];
+          const minStock = (rawMinStock !== undefined && rawMinStock !== null && String(rawMinStock).trim() !== '' && !isNaN(Number(rawMinStock)))
+            ? Math.max(0, Math.floor(Number(rawMinStock)))
+            : 5;
           const sku = String(row["SKU"] || row["sku"] || row["Codigo"] || row["Código"] || '').trim();
           const category = String(row["Categoría"] || row["Categoria"] || row["category"] || '').trim();
           const unit = String(row["Unidad"] || row["unidad"] || 'Un.').trim();
@@ -302,7 +373,7 @@ export default function Inventory() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [replenishTarget, setReplenishTarget] = useState(null);
   
-  // Formularios con todas las propiedades de las imágenes
+  // Formularios con todas las propiedades de las imágenes y especificaciones técnicas
   const [productForm, setProductForm] = useState({
     name: '',
     unit: 'Kg.',
@@ -314,6 +385,11 @@ export default function Inventory() {
     category: '',
     sku: '',
     image_url: '',
+    images: [],
+    description: '',
+    dimensions: '',
+    materials: '',
+    owner_notes: '',
     min_stock: '5',
     payment_type: 'contado', // 'contado' | 'cuenta_por_pagar'
     supplier: '',
@@ -326,13 +402,19 @@ export default function Inventory() {
   });
 
   // Funciones de autocálculo instantáneo de precios, totales y margen %
+  const isCompanyTaxFree = companySettings?.tax_enabled === false || Number(companySettings?.tax_rate) === 0;
+  const getSafeTaxRate = () => {
+    if (isCompanyTaxFree) return 0;
+    return (companySettings?.tax_rate !== undefined && companySettings?.tax_rate !== null) ? Number(companySettings.tax_rate) : 0.16;
+  };
+
   const handleCostPriceChange = (val) => {
     const cost = Number(val) || 0;
     const qty = Number(productForm.quantity) || 1;
     const total = (cost * qty).toFixed(2);
     const sell = Number(productForm.sell_price) || 0;
-    const taxRate = Number(companySettings.tax_rate) || 0.16;
-    const netSell = productForm.is_exempt ? sell : sell / (1 + taxRate);
+    const taxRate = getSafeTaxRate();
+    const netSell = (isCompanyTaxFree || productForm.is_exempt) ? sell : sell / (1 + taxRate);
     let margin = productForm.margin_pct;
     if (cost > 0) {
       if (marginType === 'markup') {
@@ -354,8 +436,8 @@ export default function Inventory() {
     const qty = Number(productForm.quantity) || 1;
     const cost = qty > 0 ? (total / qty).toFixed(2) : '0';
     const sell = Number(productForm.sell_price) || 0;
-    const taxRate = Number(companySettings.tax_rate) || 0.16;
-    const netSell = productForm.is_exempt ? sell : sell / (1 + taxRate);
+    const taxRate = getSafeTaxRate();
+    const netSell = (isCompanyTaxFree || productForm.is_exempt) ? sell : sell / (1 + taxRate);
     let margin = productForm.margin_pct;
     if (cost > 0) {
       if (marginType === 'markup') {
@@ -387,8 +469,8 @@ export default function Inventory() {
   const handleSellPriceChange = (val) => {
     const sell = Number(val) || 0;
     const cost = Number(productForm.cost_price) || 0;
-    const taxRate = Number(companySettings.tax_rate) || 0.16;
-    const netSell = productForm.is_exempt ? sell : sell / (1 + taxRate);
+    const taxRate = getSafeTaxRate();
+    const netSell = (isCompanyTaxFree || productForm.is_exempt) ? sell : sell / (1 + taxRate);
     let margin = productForm.margin_pct;
     if (cost > 0) {
       if (marginType === 'markup') {
@@ -407,7 +489,7 @@ export default function Inventory() {
   const handleMarginChange = (val) => {
     const margin = Number(val) || 0;
     const cost = Number(productForm.cost_price) || 0;
-    const taxRate = Number(companySettings.tax_rate) || 0.16;
+    const taxRate = getSafeTaxRate();
     let netSell = 0;
     if (cost > 0) {
       if (marginType === 'markup') {
@@ -416,7 +498,7 @@ export default function Inventory() {
         netSell = margin < 100 ? cost / (1 - margin / 100) : cost;
       }
     }
-    const finalSellPrice = productForm.is_exempt ? netSell : netSell * (1 + taxRate);
+    const finalSellPrice = (isCompanyTaxFree || productForm.is_exempt) ? netSell : netSell * (1 + taxRate);
     setProductForm(prev => ({
       ...prev,
       margin_pct: val,
@@ -554,6 +636,7 @@ export default function Inventory() {
     setEditingProduct(null);
     setImageStats(null);
     setImageMode('upload');
+    setUrlImageInput('');
     setProductForm({
       name: '',
       unit: 'Un.',
@@ -565,6 +648,11 @@ export default function Inventory() {
       category: '',
       sku: '',
       image_url: '',
+      images: [],
+      description: '',
+      dimensions: '',
+      materials: '',
+      owner_notes: '',
       min_stock: '5',
       payment_type: 'contado',
       supplier: '',
@@ -578,17 +666,22 @@ export default function Inventory() {
   const handleOpenEdit = (product) => {
     setEditingProduct(product);
     setImageStats(null);
-    const img = product.image_url || '';
+    setUrlImageInput('');
+    const specs = parseProductSpecs(product);
+    const productImages = (specs.images && specs.images.length > 0)
+      ? specs.images
+      : (product.image_url ? [product.image_url] : []);
+    const img = productImages[0] || product.image_url || '';
     if (img.startsWith('http://') || img.startsWith('https://')) {
       setImageMode('url');
     } else {
       setImageMode('upload');
     }
-    const isExempt = !!product.is_exempt || !!product.is_tax_exempt;
-    const taxRate = isExempt ? 0 : (Number(companySettings.tax_rate) || 0.16);
+    const isExempt = isCompanyTaxFree || !!product.is_exempt || !!product.is_tax_exempt;
+    const taxRate = isExempt ? 0 : getSafeTaxRate();
     const sellPrice = Number(product.sell_price) || 0;
     const costPrice = Number(product.cost_price) || 0;
-    const netSell = isExempt ? sellPrice : sellPrice / (1 + (Number(companySettings.tax_rate) || 0.16));
+    const netSell = isExempt ? sellPrice : sellPrice / (1 + taxRate);
     let marginPct = '0';
     if (costPrice > 0) {
       if (marginType === 'markup') {
@@ -608,7 +701,12 @@ export default function Inventory() {
       category: product.category || '',
       sku: product.sku || '',
       image_url: img,
-      min_stock: String(product.min_stock || 5),
+      images: productImages,
+      description: specs.description || '',
+      dimensions: specs.dimensions || '',
+      materials: specs.materials || '',
+      owner_notes: specs.owner_notes || '',
+      min_stock: String(product.min_stock !== undefined && product.min_stock !== null && String(product.min_stock).trim() !== '' ? product.min_stock : 5),
       payment_type: product.payment_type || 'contado',
       supplier: product.supplier || '',
       expiration_days: String(product.expiration_days || 10),
@@ -635,16 +733,37 @@ export default function Inventory() {
       return;
     }
 
+    const minStockVal = (productForm.min_stock !== undefined && productForm.min_stock !== null && String(productForm.min_stock).trim() !== '' && !isNaN(Number(productForm.min_stock)))
+      ? Math.max(0, Math.floor(Number(productForm.min_stock)))
+      : 5;
+
+    const allImages = Array.isArray(productForm.images) && productForm.images.length > 0
+      ? productForm.images
+      : (productForm.image_url ? [productForm.image_url] : []);
+
+    const serializedSpecs = serializeProductSpecs({
+      description: productForm.description || '',
+      dimensions: productForm.dimensions || '',
+      materials: productForm.materials || '',
+      owner_notes: productForm.owner_notes || '',
+      images: allImages
+    });
+
     const payload = {
       name: productForm.name,
       unit: productForm.unit,
       cost_price: Number(productForm.cost_price) || 0,
       sell_price: Number(productForm.sell_price) || 0,
       stock: Number(productForm.quantity) || 0,
-      min_stock: Number(productForm.min_stock) || 0,
+      min_stock: minStockVal,
       category: productForm.category,
       sku: productForm.sku,
-      image_url: productForm.image_url,
+      image_url: allImages[0] || '',
+      images: allImages,
+      description: serializedSpecs,
+      dimensions: productForm.dimensions || '',
+      materials: productForm.materials || '',
+      owner_notes: productForm.owner_notes || '',
       payment_type: productForm.payment_type,
       supplier: productForm.supplier,
       expiration_days: Number(productForm.expiration_days) || 10,
@@ -1163,8 +1282,8 @@ export default function Inventory() {
                   
                   const cost = Number(product.cost_price) || 0;
                   const sell = Number(product.sell_price) || 0;
-                  const isExemptProd = product.is_exempt || product.is_tax_exempt;
-                  const taxRateVal = Number(companySettings.tax_rate) || 0.16;
+                  const isExemptProd = isCompanyTaxFree || product.is_exempt || product.is_tax_exempt;
+                  const taxRateVal = getSafeTaxRate();
                   const netSell = isExemptProd ? sell : sell / (1 + taxRateVal);
 
                   let marginPct = 0;
@@ -1203,7 +1322,7 @@ export default function Inventory() {
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span>{product.name}</span>
-                              {(product.is_exempt || product.is_tax_exempt) && (
+                              {!isCompanyTaxFree && (product.is_exempt || product.is_tax_exempt) && (
                                 <span style={{ fontSize: '10px', fontWeight: 900, background: '#e0f2fe', color: '#0369a1', padding: '1px 6px', borderRadius: '4px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                   🟢 (E) Exento IVA
                                 </span>
@@ -1239,13 +1358,17 @@ export default function Inventory() {
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-cyan)' }}>
                         <DualCurrencyDisplay amount={product.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
-                        {(product.is_exempt || product.is_tax_exempt) ? (
+                        {isCompanyTaxFree ? (
+                          <div style={{ fontSize: '9.5px', color: '#0891b2', fontWeight: 700, marginTop: '2px' }}>
+                            Precio Directo (Sin IVA)
+                          </div>
+                        ) : (product.is_exempt || product.is_tax_exempt) ? (
                           <div style={{ fontSize: '9.5px', color: '#059669', fontWeight: 800, marginTop: '2px' }}>
                             🟢 0% IVA (Sin recargo)
                           </div>
                         ) : (
                           <div style={{ fontSize: '9.5px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>
-                            Neto: {formatCurrency(product.sell_price / (1 + (companySettings.tax_rate || 0.16)))}
+                            Neto: {formatCurrency(product.sell_price / (1 + taxRateVal))}
                           </div>
                         )}
                       </td>
@@ -1396,12 +1519,25 @@ export default function Inventory() {
                   </div>
                 </div>
 
-                {/* ── FOTO / IMAGEN DEL PRODUCTO (SUBIDA COMPRIMIDA O LINK WEB) ── */}
+                {/* ── GALERÍA MULTI-FOTOS DEL PRODUCTO (PORTADA + FOTOS ADICIONALES) ── */}
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', margin: 0 }}>
-                      Foto / Imagen del Producto
-                    </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <ImageIcon size={15} style={{ color: 'var(--color-cyan)' }} />
+                        <span>Galería de Fotos del Producto</span>
+                      </label>
+                      <span style={{
+                        fontSize: '10.5px',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        background: (productForm.images?.length > 0 || productForm.image_url) ? 'rgba(6, 182, 212, 0.1)' : '#f1f5f9',
+                        color: (productForm.images?.length > 0 || productForm.image_url) ? 'var(--color-cyan)' : '#94a3b8'
+                      }}>
+                        {productForm.images?.length > 0 ? `${productForm.images.length} foto(s)` : (productForm.image_url ? '1 foto' : 'Sin fotos')}
+                      </span>
+                    </div>
 
                     {/* Selector de Modo */}
                     <div style={{ display: 'flex', gap: '4px', background: '#e2e8f0', padding: '2px', borderRadius: '8px' }}>
@@ -1419,7 +1555,7 @@ export default function Inventory() {
                           color: imageMode === 'upload' ? '#ffffff' : '#64748b'
                         }}
                       >
-                        📁 Subir Imagen
+                        📁 Subir Fotos
                       </button>
                       <button
                         type="button"
@@ -1440,126 +1576,227 @@ export default function Inventory() {
                     </div>
                   </div>
 
+                  {/* Tira de Fotos Cargadas (Thumbnails) */}
+                  {Array.isArray(productForm.images) && productForm.images.length > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      overflowX: 'auto',
+                      padding: '10px',
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      border: '1px solid #cbd5e1',
+                      marginBottom: '12px'
+                    }}>
+                      {productForm.images.map((imgSrc, imgIdx) => (
+                        <div
+                          key={`prod-thumb-${imgIdx}`}
+                          style={{
+                            position: 'relative',
+                            width: '68px',
+                            height: '68px',
+                            borderRadius: '10px',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            border: imgIdx === 0 ? '2px solid var(--color-cyan)' : '1px solid #cbd5e1',
+                            boxShadow: imgIdx === 0 ? '0 0 0 2px rgba(6,182,212,0.25)' : 'none',
+                            background: '#f8fafc'
+                          }}
+                        >
+                          <img
+                            src={imgSrc}
+                            alt={`Foto ${imgIdx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+
+                          {/* Badge de Portada */}
+                          {imgIdx === 0 ? (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              background: 'linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.85) 100%)',
+                              color: '#38bdf8',
+                              fontSize: '9px',
+                              fontWeight: 900,
+                              textAlign: 'center',
+                              padding: '2px 0'
+                            }}>
+                              PORTADA
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryImage(imgIdx)}
+                              title="Convertir en foto principal (Portada)"
+                              style={{
+                                position: 'absolute',
+                                bottom: '2px',
+                                left: '2px',
+                                background: 'rgba(15, 23, 42, 0.75)',
+                                color: '#fbbf24',
+                                border: 'none',
+                                borderRadius: '4px',
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                padding: 0
+                              }}
+                            >
+                              <Star size={11} />
+                            </button>
+                          )}
+
+                          {/* Botón de Quitar esta foto */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImageAtIndex(imgIdx)}
+                            title="Eliminar esta foto"
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '2px',
+                              background: 'rgba(239, 68, 68, 0.9)',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '18px',
+                              height: '18px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            <X size={11} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Botón rápido para agregar otra foto */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (imageMode === 'upload') {
+                            productImageInputRef.current && productImageInputRef.current.click();
+                          }
+                        }}
+                        style={{
+                          width: '68px',
+                          height: '68px',
+                          borderRadius: '10px',
+                          border: '2px dashed #cbd5e1',
+                          background: '#f8fafc',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          color: '#64748b'
+                        }}
+                        title="Agregar otra foto"
+                      >
+                        <Plus size={18} style={{ color: 'var(--color-cyan)' }} />
+                        <span style={{ fontSize: '9.5px', fontWeight: 800, marginTop: '2px' }}>+ Foto</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Control de Carga según Modo */}
                   {imageMode === 'upload' ? (
                     <div>
                       <input
                         type="file"
                         ref={productImageInputRef}
                         onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleProductImageFileSelect(e.target.files[0]);
+                          if (e.target.files && e.target.files.length > 0) {
+                            Array.from(e.target.files).forEach(f => handleProductImageFileSelect(f));
                           }
                         }}
                         accept="image/*"
+                        multiple
                         style={{ display: 'none' }}
                       />
 
-                      {productForm.image_url ? (
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '14px',
-                          padding: '12px',
-                          background: '#ffffff',
+                      <div
+                        onClick={() => productImageInputRef.current && productImageInputRef.current.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            Array.from(e.dataTransfer.files).forEach(f => handleProductImageFileSelect(f));
+                          }
+                        }}
+                        style={{
+                          border: '2px dashed #cbd5e1',
                           borderRadius: '12px',
-                          border: '1px solid #cbd5e1'
-                        }}>
-                          <img
-                            src={productForm.image_url}
-                            alt="Vista Previa"
-                            style={{ width: '56px', height: '56px', borderRadius: '10px', objectFit: 'cover', border: '1px solid #e2e8f0', flexShrink: 0 }}
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                              Imagen cargada correctamente
-                            </div>
-                            {imageStats ? (
-                              <div style={{ fontSize: '11px', color: '#059669', fontWeight: 700, marginTop: '2px' }}>
-                                ⚡ Optimizada: {formatBytes(imageStats.originalSize)} ➔ {formatBytes(imageStats.compressedSize)} ({imageStats.savingsPct}% ahorro)
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                Lista para el catálogo digital y POS
-                              </div>
-                            )}
+                          padding: '16px',
+                          textAlign: 'center',
+                          background: '#ffffff',
+                          cursor: 'pointer',
+                          transition: 'all 0.25s ease'
+                        }}
+                      >
+                        {compressingImage ? (
+                          <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-cyan)' }}>
+                            ⏳ Comprimiendo y optimizando foto...
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setProductForm(prev => ({ ...prev, image_url: '' }));
-                              setImageStats(null);
-                              if (productImageInputRef.current) productImageInputRef.current.value = '';
-                            }}
-                            style={{
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
-                              color: '#ef4444',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '11.5px',
-                              fontWeight: 800,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => productImageInputRef.current && productImageInputRef.current.click()}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                              handleProductImageFileSelect(e.dataTransfer.files[0]);
-                            }
-                          }}
-                          style={{
-                            border: '2px dashed #cbd5e1',
-                            borderRadius: '12px',
-                            padding: '16px',
-                            textAlign: 'center',
-                            background: '#ffffff',
-                            cursor: 'pointer',
-                            transition: 'all 0.25s ease'
-                          }}
-                        >
-                          {compressingImage ? (
-                            <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-cyan)' }}>
-                              ⏳ Comprimiendo y optimizando imagen...
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                            <Upload size={22} style={{ color: 'var(--color-cyan)' }} />
+                            <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
+                              {productForm.images?.length > 0 ? 'Haz clic o arrastra para añadir MÁS fotos' : 'Haz clic o arrastra una o varias fotos aquí'}
                             </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                              <Upload size={22} style={{ color: 'var(--color-cyan)' }} />
-                              <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
-                                Haz clic o arrastra una foto aquí
-                              </div>
-                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                Se comprimirá automáticamente a tamaño ligero para la base de datos
-                              </span>
-                            </div>
-                          )}
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                              Soporta PNG, JPG, WEBP • Compresión automática para máxima velocidad en vitrina y POS
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {imageStats && (
+                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: 700, marginTop: '6px', textAlign: 'center' }}>
+                          ⚡ Última foto optimizada: {formatBytes(imageStats.originalSize)} ➔ {formatBytes(imageStats.compressedSize)} ({imageStats.savingsPct}% ahorro)
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input
                         type="url"
                         className="form-input"
-                        placeholder="https://ejemplo.com/foto-platillo.jpg"
-                        value={productForm.image_url || ''}
-                        onChange={(e) => setProductForm({ ...productForm, image_url: e.target.value })}
+                        placeholder="https://ejemplo.com/foto-producto.jpg"
+                        value={urlImageInput}
+                        onChange={(e) => setUrlImageInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddImageUrl();
+                          }
+                        }}
                         style={{ flex: 1, background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
                       />
-                      {productForm.image_url && (
-                        <img 
-                          src={productForm.image_url} 
-                          alt="Preview" 
-                          onError={(e) => e.target.style.display = 'none'} 
-                          style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
-                        />
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddImageUrl}
+                        className="btn-primary"
+                        style={{
+                          padding: '9px 16px',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          borderRadius: '10px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        + Añadir Foto
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1692,54 +1929,31 @@ export default function Inventory() {
                   </div>
                 </div>
 
-                {/* Configuración Fiscal: Exento de IVA */}
-                <div 
-                  onClick={() => {
-                    const newIsExempt = !productForm.is_exempt;
-                    const cost = Number(productForm.cost_price) || 0;
-                    const margin = Number(productForm.margin_pct) || 0;
-                    const taxRate = Number(companySettings.tax_rate) || 0.16;
-                    let netSell = 0;
-                    if (cost > 0) {
-                      if (marginType === 'markup') {
-                        netSell = cost * (1 + margin / 100);
-                      } else {
-                        netSell = margin < 100 ? cost / (1 - margin / 100) : cost;
-                      }
-                    } else {
-                      const currentSell = Number(productForm.sell_price) || 0;
-                      netSell = productForm.is_exempt ? currentSell : currentSell / (1 + taxRate);
-                    }
-                    const finalSellPrice = newIsExempt ? netSell : netSell * (1 + taxRate);
-                    setProductForm(prev => ({
-                      ...prev,
-                      is_exempt: newIsExempt,
-                      sell_price: String(parseFloat(finalSellPrice.toFixed(2)))
-                    }));
-                  }}
-                  style={{
+                {/* Configuración Fiscal: Exento de IVA / Régimen de la Empresa */}
+                {isCompanyTaxFree ? (
+                  <div style={{
                     marginTop: '16px',
-                    background: productForm.is_exempt ? '#ecfdf5' : '#ffffff',
-                    border: productForm.is_exempt ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+                    background: 'rgba(6, 182, 212, 0.06)',
+                    border: '1px solid rgba(6, 182, 212, 0.25)',
                     borderRadius: '12px',
-                    padding: '12px 14px',
+                    padding: '12px 16px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input
-                      type="checkbox"
-                      id="is_exempt_check"
-                      checked={!!productForm.is_exempt}
-                      onChange={(e) => {
-                        const newIsExempt = e.target.checked;
+                    gap: '12px'
+                  }}>
+                    <ShieldCheck size={20} color="var(--color-cyan, #06b6d4)" style={{ flexShrink: 0 }} />
+                    <div style={{ fontSize: '11.5px', color: '#0e7490', lineHeight: 1.4 }}>
+                      <strong style={{ color: '#0891b2' }}>Régimen Sin IVA (0%):</strong> Tu empresa opera exenta de IVA. Los precios son netos directos y no se aplicará recargo fiscal en el POS.
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div 
+                      onClick={() => {
+                        const newIsExempt = !productForm.is_exempt;
                         const cost = Number(productForm.cost_price) || 0;
                         const margin = Number(productForm.margin_pct) || 0;
-                        const taxRate = Number(companySettings.tax_rate) || 0.16;
+                        const taxRate = getSafeTaxRate();
                         let netSell = 0;
                         if (cost > 0) {
                           if (marginType === 'markup') {
@@ -1758,80 +1972,205 @@ export default function Inventory() {
                           sell_price: String(parseFloat(finalSellPrice.toFixed(2)))
                         }));
                       }}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div>
-                      <label htmlFor="is_exempt_check" style={{ fontSize: '12.5px', fontWeight: 800, color: productForm.is_exempt ? '#047857' : '#1e293b', cursor: 'pointer', display: 'block' }}>
-                        🚫 Producto Exento de IVA (Sin Impuesto por defecto)
-                      </label>
-                      <span style={{ fontSize: '11px', color: productForm.is_exempt ? '#059669' : '#64748b' }}>
-                        Al marcar esta casilla, este producto no sumará IVA al ser facturado en el POS.
+                      style={{
+                        marginTop: '16px',
+                        background: productForm.is_exempt ? '#ecfdf5' : '#ffffff',
+                        border: productForm.is_exempt ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          id="is_exempt_check"
+                          checked={!!productForm.is_exempt}
+                          onChange={(e) => {
+                            const newIsExempt = e.target.checked;
+                            const cost = Number(productForm.cost_price) || 0;
+                            const margin = Number(productForm.margin_pct) || 0;
+                            const taxRate = getSafeTaxRate();
+                            let netSell = 0;
+                            if (cost > 0) {
+                              if (marginType === 'markup') {
+                                netSell = cost * (1 + margin / 100);
+                              } else {
+                                netSell = margin < 100 ? cost / (1 - margin / 100) : cost;
+                              }
+                            } else {
+                              const currentSell = Number(productForm.sell_price) || 0;
+                              netSell = productForm.is_exempt ? currentSell : currentSell / (1 + taxRate);
+                            }
+                            const finalSellPrice = newIsExempt ? netSell : netSell * (1 + taxRate);
+                            setProductForm(prev => ({
+                              ...prev,
+                              is_exempt: newIsExempt,
+                              sell_price: String(parseFloat(finalSellPrice.toFixed(2)))
+                            }));
+                          }}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div>
+                          <label htmlFor="is_exempt_check" style={{ fontSize: '12.5px', fontWeight: 800, color: productForm.is_exempt ? '#047857' : '#1e293b', cursor: 'pointer', display: 'block' }}>
+                            🚫 Producto Exento de IVA (Sin Impuesto por defecto)
+                          </label>
+                          <span style={{ fontSize: '11px', color: productForm.is_exempt ? '#059669' : '#64748b' }}>
+                            Al marcar esta casilla, este producto no sumará IVA al ser facturado en el POS.
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '10.5px', fontWeight: 900, background: productForm.is_exempt ? '#10b981' : '#f1f5f9', color: productForm.is_exempt ? '#ffffff' : '#64748b', padding: '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                        {productForm.is_exempt ? '🟢 EXENTO (0% IVA)' : '🔵 AFECTO A IVA'}
                       </span>
                     </div>
-                  </div>
-                  <span style={{ fontSize: '10.5px', fontWeight: 900, background: productForm.is_exempt ? '#10b981' : '#f1f5f9', color: productForm.is_exempt ? '#ffffff' : '#64748b', padding: '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                    {productForm.is_exempt ? '🟢 EXENTO (0% IVA)' : '🔵 AFECTO A IVA'}
-                  </span>
-                </div>
 
-                {/* Desglose Fiscal de Impuestos (16% IVA Venezuela / 19% IVA Chile) */}
-                {(() => {
-                  const sPrice = Number(productForm.sell_price) || 0;
-                  const currentTaxRate = Number(companySettings.tax_rate) || 0.16;
-                  const taxPctStr = `${(currentTaxRate * 100).toFixed(0)}%`;
-                  
-                  if (sPrice <= 0) return null;
+                    {/* Desglose Fiscal de Impuestos */}
+                    {(() => {
+                      const sPrice = Number(productForm.sell_price) || 0;
+                      const currentTaxRate = getSafeTaxRate();
+                      const taxPctStr = `${(currentTaxRate * 100).toFixed(0)}%`;
+                      
+                      if (sPrice <= 0) return null;
 
-                  if (productForm.is_exempt) {
-                    const savedTaxVal = sPrice * currentTaxRate;
-                    return (
-                      <div style={{
-                        marginTop: '12px',
-                        background: '#f0fdf4',
-                        border: '1px solid #86efac',
-                        borderRadius: '10px',
-                        padding: '10px 14px',
-                        fontSize: '12px'
-                      }}>
-                        <div style={{ fontWeight: 800, color: '#15803d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>🟢 Impuesto Eximido (Descontado / Sin recargo):</span>
-                          <span style={{ fontSize: '13px', fontWeight: 900 }}>-$0.00 IVA (0%)</span>
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#166534', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Precio Final Neto: <strong>{formatCurrency(sPrice)}</strong></span>
-                          <span>Ahorro por Exención ({taxPctStr}): <strong>{formatCurrency(savedTaxVal)}</strong></span>
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    const baseNet = sPrice / (1 + currentTaxRate);
-                    const taxVal = sPrice - baseNet;
-                    return (
-                      <div style={{
-                        marginTop: '12px',
-                        background: '#f8fafc',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '10px',
-                        padding: '10px 14px',
-                        fontSize: '12px'
-                      }}>
-                        <div style={{ fontWeight: 800, color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>🔵 Desglose de Impuesto ({companySettings.tax_name || 'IVA'} {taxPctStr}):</span>
-                          <span style={{ fontSize: '13px', fontWeight: 900, color: '#0284c7' }}>{formatCurrency(taxVal)}</span>
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Base Imponible Neto (Sin IVA): <strong>{formatCurrency(baseNet)}</strong></span>
-                          <span>Resta/Descuento de IVA ({taxPctStr}): <strong>-{formatCurrency(taxVal)}</strong></span>
-                        </div>
-                      </div>
-                    );
-                  }
-                })()}
+                      if (productForm.is_exempt) {
+                        const savedTaxVal = sPrice * currentTaxRate;
+                        return (
+                          <div style={{
+                            marginTop: '12px',
+                            background: '#f0fdf4',
+                            border: '1px solid #86efac',
+                            borderRadius: '10px',
+                            padding: '10px 14px',
+                            fontSize: '12px'
+                          }}>
+                            <div style={{ fontWeight: 800, color: '#15803d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>🟢 Impuesto Eximido (Descontado / Sin recargo):</span>
+                              <span style={{ fontSize: '13px', fontWeight: 900 }}>-$0.00 IVA (0%)</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#166534', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Precio Final Neto: <strong>{formatCurrency(sPrice)}</strong></span>
+                              <span>Ahorro por Exención ({taxPctStr}): <strong>{formatCurrency(savedTaxVal)}</strong></span>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        const baseNet = sPrice / (1 + currentTaxRate);
+                        const taxVal = sPrice - baseNet;
+                        return (
+                          <div style={{
+                            marginTop: '12px',
+                            background: '#f8fafc',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            padding: '10px 14px',
+                            fontSize: '12px'
+                          }}>
+                            <div style={{ fontWeight: 800, color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>🔵 Desglose de Impuesto ({companySettings.tax_name || 'IVA'} {taxPctStr}):</span>
+                              <span style={{ fontSize: '13px', fontWeight: 900, color: '#0284c7' }}>{formatCurrency(taxVal)}</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Base Imponible Neto (Sin IVA): <strong>{formatCurrency(baseNet)}</strong></span>
+                              <span>Resta/Descuento de IVA ({taxPctStr}): <strong>-{formatCurrency(taxVal)}</strong></span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </>
+                )}
 
               </div>
 
-              {/* SECCIÓN 3: INFORMACIÓN DE PAGO Y PROVEEDOR */}
+              {/* SECCIÓN 3: ESPECIFICACIONES TÉCNICAS Y COMENTARIOS DEL DUEÑO (VITRINA / MERCADO LIBRE) */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', fontWeight: '800', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <Package size={18} style={{ color: 'var(--color-cyan)' }} />
+                    <span>Ficha Técnica y Comentarios de Vitrina (Estilo Mercado Libre)</span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 800, background: 'rgba(6, 182, 212, 0.1)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '8px' }}>
+                    Visible en Vitrina QR
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px', fontWeight: '500' }}>
+                  Estos datos y notas se muestran en la ventana ampliada cuando los clientes hacen clic en la foto del producto en el catálogo online.
+                </p>
+
+                {/* Descripción Detallada del Producto */}
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Package size={14} style={{ color: 'var(--color-cyan)' }} />
+                    <span>Descripción Detallada del Producto</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Descripción comercial atractiva del producto, características principales, sabor, textura o beneficios..."
+                    value={productForm.description || ''}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  {/* Dimensiones */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Ruler size={14} style={{ color: 'var(--color-cyan)' }} />
+                      <span>Dimensiones / Medidas</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej: 30 x 20 x 15 cm / Peso: 450g / Talla M"
+                      value={productForm.dimensions || ''}
+                      onChange={(e) => setProductForm({ ...productForm, dimensions: e.target.value })}
+                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
+                    />
+                  </div>
+
+                  {/* Materiales */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Layers size={14} style={{ color: 'var(--color-amber)' }} />
+                      <span>Materiales / Ingredientes</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej: Acero quirúrgico, Cuero / Pan brioche"
+                      value={productForm.materials || ''}
+                      onChange={(e) => setProductForm({ ...productForm, materials: e.target.value })}
+                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Comentarios del Dueño */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MessageSquare size={14} style={{ color: 'var(--color-emerald)' }} />
+                    <span>Comentarios y Notas del Vendedor / Dueño</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Recomendaciones de uso, detalles de calidad, notas de preparación o sugerencias para tus clientes..."
+                    value={productForm.owner_notes || ''}
+                    onChange={(e) => setProductForm({ ...productForm, owner_notes: e.target.value })}
+                    style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+
+              {/* SECCIÓN 4: INFORMACIÓN DE PAGO Y PROVEEDOR */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: '#0f172a', fontWeight: '800', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <CreditCard size={18} style={{ color: 'var(--color-amber)' }} />
