@@ -262,6 +262,23 @@ export default function Showcase({ isPublicView = false }) {
     setActiveImageIndex(0);
   };
 
+  // Helper para identificar productos de forma única
+  const getProdKey = (p) => p?.id || p?.sku || p?.name;
+
+  // Control de stock e inventario en Tienda Online / Vitrina
+  const isUnlimitedStock = (prod) => {
+    if (!prod) return false;
+    if (prod.sku?.startsWith('SERV-') || prod.stock === 999) return true;
+    if (isFoodBusiness && (prod.stock === undefined || prod.stock === null || prod.stock === '')) return true;
+    return false;
+  };
+
+  const getProductStock = (prod) => {
+    if (!prod) return 0;
+    if (isUnlimitedStock(prod)) return Infinity;
+    return Math.max(0, Number(prod.stock || 0));
+  };
+
   const handleOpenProductDetail = (prod) => {
     setSelectedProductDetail(prod);
     const specs = parseProductSpecs(prod);
@@ -276,7 +293,13 @@ export default function Showcase({ isPublicView = false }) {
       images: prodImages
     });
     setActiveImageIndex(0);
-    setDetailQuantity(1);
+
+    const isUnlim = isUnlimitedStock(prod);
+    const maxStock = getProductStock(prod);
+    const inCartQty = basket.find(i => getProdKey(i.part) === getProdKey(prod))?.cantidad || 0;
+    const canAdd = isUnlim ? 99 : Math.max(0, maxStock - inCartQty);
+    setDetailQuantity(canAdd > 0 ? 1 : 0);
+
     setIsEditingSpecs(false);
     setSaveFeedback('');
   };
@@ -332,8 +355,39 @@ export default function Showcase({ isPublicView = false }) {
 
   const handleAddDetailToBasket = () => {
     if (!selectedProductDetail) return;
-    for (let i = 0; i < detailQuantity; i++) {
-      addToBasket(selectedProductDetail);
+    if (detailQuantity <= 0) {
+      alert("Selecciona al menos 1 unidad para agregar.");
+      return;
+    }
+
+    const maxStock = getProductStock(selectedProductDetail);
+    const isUnlimited = isUnlimitedStock(selectedProductDetail);
+    const targetKey = getProdKey(selectedProductDetail);
+    const inCart = basket.find(i => getProdKey(i.part) === targetKey);
+    const currentInCart = inCart ? inCart.cantidad : 0;
+
+    if (!isUnlimited) {
+      if (maxStock <= 0) {
+        alert(`"${selectedProductDetail.name}" está agotado en inventario.`);
+        return;
+      }
+      if (currentInCart + detailQuantity > maxStock) {
+        const remaining = Math.max(0, maxStock - currentInCart);
+        if (remaining <= 0) {
+          alert(`Ya tienes el total disponible (${maxStock} unidades) en tu pedido.`);
+        } else {
+          alert(`No puedes agregar ${detailQuantity} unidades. Solo quedan ${remaining} disponibles en inventario.`);
+        }
+        return;
+      }
+    }
+
+    if (inCart) {
+      setBasket(basket.map(item =>
+        getProdKey(item.part) === targetKey ? { ...item, cantidad: item.cantidad + detailQuantity } : item
+      ));
+    } else {
+      setBasket([...basket, { part: selectedProductDetail, cantidad: detailQuantity }]);
     }
     setSelectedProductDetail(null);
   };
@@ -434,12 +488,17 @@ export default function Showcase({ isPublicView = false }) {
     });
   }, [inventory, selectedCategory, searchQuery]);
 
-  // Helper para identificar productos de forma única
-  const getProdKey = (p) => p?.id || p?.sku || p?.name;
-
   // Gestión de Canasta (Soporta unidades y productos a granel/peso en Kilos/Gramos)
   const addToBasket = (product, weightQtyOverride = null) => {
     if (!product) return;
+
+    const maxStock = getProductStock(product);
+    const isUnlimited = isUnlimitedStock(product);
+
+    if (!isUnlimited && maxStock <= 0) {
+      alert(`El producto "${product.name}" está agotado en inventario.`);
+      return;
+    }
 
     const isWeightProduct = product.is_weight_based || product.unit === 'Kg.' || product.unit === 'g';
     let weightQty = weightQtyOverride;
@@ -465,6 +524,17 @@ export default function Showcase({ isPublicView = false }) {
     const initialQty = weightQty !== null ? weightQty : 1;
     const targetKey = getProdKey(product);
     const existing = basket.find(item => getProdKey(item.part) === targetKey);
+    const currentInBasket = existing ? existing.cantidad : 0;
+
+    if (!isUnlimited && (currentInBasket + initialQty > maxStock)) {
+      const remaining = maxStock - currentInBasket;
+      if (remaining <= 0) {
+        alert(`Ya tienes el total disponible (${maxStock} ${product.unit || 'unidades'}) de "${product.name}" en tu pedido.`);
+      } else {
+        alert(`Solo quedan ${remaining} ${product.unit || 'unidades'} disponibles en inventario de "${product.name}". No es posible agregar más.`);
+      }
+      return;
+    }
 
     if (existing) {
       const newQty = existing.cantidad + initialQty;
@@ -481,11 +551,20 @@ export default function Showcase({ isPublicView = false }) {
     const item = basket.find(i => getProdKey(i.part) === targetKey);
     if (!item) return;
 
+    if (delta > 0) {
+      const maxStock = getProductStock(item.part);
+      const isUnlimited = isUnlimitedStock(item.part);
+      if (!isUnlimited && item.cantidad + delta > maxStock) {
+        alert(`Stock insuficiente. Solo hay ${maxStock} ${item.part.unit || 'unidades'} disponibles en inventario.`);
+        return;
+      }
+    }
+
     const newQty = item.cantidad + delta;
     if (newQty <= 0) {
       setBasket(basket.filter(i => getProdKey(i.part) !== targetKey));
     } else {
-      setBasket(basket.map(i => getProdKey(i.part) === targetKey ? { ...i, cantidad: newQty } : i));
+      setBasket(basket.map(i => getProdKey(i.part) === targetKey ? { ...i, cantidad: Number(newQty.toFixed(3)) } : i));
     }
   };
 
@@ -1302,6 +1381,25 @@ export default function Showcase({ isPublicView = false }) {
                         </span>
                       )}
 
+                      {!isUnlimitedStock(prod) && getProductStock(prod) <= 0 && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '8px',
+                          left: '8px',
+                          fontSize: '9.5px',
+                          fontWeight: 900,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(239, 68, 68, 0.9)',
+                          color: '#ffffff',
+                          backdropFilter: 'blur(4px)',
+                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                          zIndex: 2
+                        }}>
+                          AGOTADO
+                        </span>
+                      )}
+
                       {(() => {
                         const count = (Array.isArray(prod.images) && prod.images.length > 0)
                           ? prod.images.length
@@ -1420,41 +1518,92 @@ export default function Showcase({ isPublicView = false }) {
                           showSwap={false} 
                         />
                         
-                        {inBasket ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', borderRadius: '8px', padding: '4px 8px', border: '1px solid #cbd5e1' }}>
-                            <button onClick={() => updateBasketQty(prod, -1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
-                              <Minus size={14} />
-                            </button>
-                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', minWidth: '16px', textAlign: 'center' }}>{inBasket.cantidad}</span>
-                            <button onClick={() => updateBasketQty(prod, 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: companySettings.button_color || companySettings.accent_color || 'var(--color-cyan)', display: 'flex', alignItems: 'center' }}>
+                        {(() => {
+                          const isUnlim = isUnlimitedStock(prod);
+                          const prodStock = getProductStock(prod);
+                          const isOutOfStock = !isUnlim && prodStock <= 0;
+                          const isAtMax = !isUnlim && inBasket && inBasket.cantidad >= prodStock;
+
+                          if (inBasket) {
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', borderRadius: '8px', padding: '4px 8px', border: '1px solid #cbd5e1' }}>
+                                <button onClick={() => updateBasketQty(prod, -1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                                  <Minus size={14} />
+                                </button>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', minWidth: '16px', textAlign: 'center' }}>{inBasket.cantidad}</span>
+                                <button 
+                                  onClick={() => {
+                                    if (isAtMax) {
+                                      alert(`Stock máximo alcanzado: solo hay ${prodStock} unidades disponibles en inventario.`);
+                                      return;
+                                    }
+                                    updateBasketQty(prod, 1);
+                                  }} 
+                                  disabled={isAtMax}
+                                  style={{ 
+                                    background: 'none', 
+                                    border: 'none', 
+                                    cursor: isAtMax ? 'not-allowed' : 'pointer', 
+                                    opacity: isAtMax ? 0.35 : 1,
+                                    color: companySettings.button_color || companySettings.accent_color || 'var(--color-cyan)', 
+                                    display: 'flex', 
+                                    alignItems: 'center' 
+                                  }}
+                                  title={isAtMax ? `Stock máximo (${prodStock})` : 'Sumar 1'}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          if (isOutOfStock) {
+                            return (
+                              <button
+                                type="button"
+                                disabled
+                                style={{
+                                  padding: '7px 14px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  borderRadius: '8px',
+                                  background: '#f1f5f9',
+                                  color: '#94a3b8',
+                                  border: '1px solid #e2e8f0',
+                                  cursor: 'not-allowed'
+                                }}
+                              >
+                                AGOTADO
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button 
+                              onClick={() => addToBasket(prod)}
+                              style={{
+                                padding: '7px 14px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: companySettings.button_color 
+                                  ? `linear-gradient(135deg, ${companySettings.button_color} 0%, ${companySettings.button_color}ee 100%)` 
+                                  : 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: 'pointer',
+                                boxShadow: `0 4px 12px ${companySettings.button_color || '#06b6d4'}35`,
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
                               <Plus size={14} />
+                              <span>AGREGAR</span>
                             </button>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => addToBasket(prod)}
-                            style={{
-                              padding: '7px 14px',
-                              fontSize: '12px',
-                              fontWeight: 800,
-                              borderRadius: '8px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              background: companySettings.button_color 
-                                ? `linear-gradient(135deg, ${companySettings.button_color} 0%, ${companySettings.button_color}ee 100%)` 
-                                : 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
-                              color: '#ffffff',
-                              border: 'none',
-                              cursor: 'pointer',
-                              boxShadow: `0 4px 12px ${companySettings.button_color || '#06b6d4'}35`,
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            <Plus size={14} />
-                            <span>AGREGAR</span>
-                          </button>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1791,8 +1940,13 @@ export default function Showcase({ isPublicView = false }) {
                     <div key={item.part?.id || item.part?.sku || `basket-item-${idx}`} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.part.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <DualCurrencyDisplay amount={item.part.sell_price} fontSize="11px" primaryColor="var(--text-muted)" showSwap={false} /> c/u
+                          {!isUnlimitedStock(item.part) && (
+                            <span style={{ fontSize: '10px', color: item.cantidad >= getProductStock(item.part) ? '#ef4444' : '#64748b', fontWeight: item.cantidad >= getProductStock(item.part) ? 800 : 500 }}>
+                              • Disp: {getProductStock(item.part)}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1823,26 +1977,41 @@ export default function Showcase({ isPublicView = false }) {
                           {item.cantidad}
                         </span>
 
-                        <button
-                          type="button"
-                          onClick={() => updateBasketQty(item.part, 1)}
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#ffffff',
-                            color: '#475569',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            padding: 0
-                          }}
-                          title="Sumar 1"
-                        >
-                          <Plus size={12} />
-                        </button>
+                        {(() => {
+                          const isUnlim = isUnlimitedStock(item.part);
+                          const maxStock = getProductStock(item.part);
+                          const isAtMax = !isUnlim && item.cantidad >= maxStock;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isAtMax) {
+                                  alert(`Stock máximo alcanzado: solo hay ${maxStock} unidades disponibles en inventario.`);
+                                  return;
+                                }
+                                updateBasketQty(item.part, 1);
+                              }}
+                              disabled={isAtMax}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: '#ffffff',
+                                color: isAtMax ? '#94a3b8' : '#475569',
+                                opacity: isAtMax ? 0.35 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: isAtMax ? 'not-allowed' : 'pointer',
+                                padding: 0
+                              }}
+                              title={isAtMax ? `Stock máximo (${maxStock})` : 'Sumar 1'}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          );
+                        })()}
 
                         <button
                           type="button"
@@ -2185,9 +2354,17 @@ export default function Showcase({ isPublicView = false }) {
       {/* ========================================================================= */}
       {/* 🔍 MODAL VISTA AMPLIADA Y FICHA DE PRODUCTO (ESTILO MERCADO LIBRE) 🔍 */}
       {/* ========================================================================= */}
-      {selectedProductDetail && (
-        <div 
-          className="modal-overlay" 
+      {selectedProductDetail && (() => {
+        const modalStock = getProductStock(selectedProductDetail);
+        const modalIsUnlimited = isUnlimitedStock(selectedProductDetail);
+        const modalInBasket = basket.find(item => getProdKey(item.part) === getProdKey(selectedProductDetail))?.cantidad || 0;
+        const modalAvailableToAdd = modalIsUnlimited ? Infinity : Math.max(0, modalStock - modalInBasket);
+        const modalIsOutOfStock = !modalIsUnlimited && modalStock <= 0;
+        const modalIsMaxInBasket = !modalIsUnlimited && !modalIsOutOfStock && modalAvailableToAdd <= 0;
+
+        return (
+          <div 
+            className="modal-overlay" 
           style={{ 
             zIndex: 10000, 
             display: 'flex', 
@@ -2294,6 +2471,34 @@ export default function Showcase({ isPublicView = false }) {
                           objectFit: 'contain'
                         }} 
                       />
+
+                      {/* Insignia de Agotado en Foto Principal */}
+                      {modalIsOutOfStock && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'rgba(15, 23, 42, 0.65)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 4,
+                          backdropFilter: 'blur(3px)'
+                        }}>
+                          <span style={{
+                            background: '#ef4444',
+                            color: '#ffffff',
+                            fontWeight: 900,
+                            fontSize: '16px',
+                            padding: '8px 18px',
+                            borderRadius: '12px',
+                            letterSpacing: '1.5px',
+                            boxShadow: '0 6px 20px rgba(239, 68, 68, 0.5)',
+                            textTransform: 'uppercase'
+                          }}>
+                            AGOTADO
+                          </span>
+                        </div>
+                      )}
 
                       {/* Categoría */}
                       {selectedProductDetail.category && (
@@ -2602,11 +2807,26 @@ export default function Showcase({ isPublicView = false }) {
                           width: '8px',
                           height: '8px',
                           borderRadius: '50%',
-                          background: selectedProductDetail.stock > 0 ? '#10b981' : '#f59e0b',
+                          background: modalIsOutOfStock ? '#ef4444' : modalIsMaxInBasket ? '#f59e0b' : '#10b981',
                           display: 'inline-block'
                         }} />
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
-                          {selectedProductDetail.stock > 0 ? `Disponible (${selectedProductDetail.stock} unidades)` : 'Bajo pedido / consultar'}
+                        <span style={{ 
+                          fontSize: '12px', 
+                          fontWeight: 700, 
+                          color: modalIsOutOfStock ? '#ef4444' : modalIsMaxInBasket ? '#b45309' : '#334155' 
+                        }}>
+                          {modalIsUnlimited 
+                            ? 'Disponible' 
+                            : modalIsOutOfStock 
+                              ? 'Agotado (Sin stock en inventario)' 
+                              : modalIsMaxInBasket 
+                                ? `Stock máximo alcanzado (${modalInBasket} en tu pedido)` 
+                                : `Disponible (${modalStock} ${selectedProductDetail.unit || 'unidades'})`}
+                          {!modalIsUnlimited && !modalIsOutOfStock && !modalIsMaxInBasket && modalInBasket > 0 && (
+                            <span style={{ color: '#0284c7', marginLeft: '6px', fontWeight: 600 }}>
+                              • {modalInBasket} en tu pedido
+                            </span>
+                          )}
                         </span>
                       </div>
                       {selectedProductDetail.sku && (
@@ -2879,17 +3099,39 @@ export default function Showcase({ isPublicView = false }) {
                       <button
                         type="button"
                         onClick={() => setDetailQuantity(Math.max(1, detailQuantity - 1))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', padding: 0 }}
+                        disabled={modalIsOutOfStock || modalIsMaxInBasket || detailQuantity <= 1}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          cursor: (modalIsOutOfStock || modalIsMaxInBasket || detailQuantity <= 1) ? 'not-allowed' : 'pointer', 
+                          color: (modalIsOutOfStock || modalIsMaxInBasket || detailQuantity <= 1) ? '#94a3b8' : '#475569', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          padding: 0 
+                        }}
                       >
                         <Minus size={16} />
                       </button>
-                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', minWidth: '24px', textAlign: 'center' }}>
-                        {detailQuantity}
+                      <span style={{ fontSize: '15px', fontWeight: 800, color: (modalIsOutOfStock || modalIsMaxInBasket) ? '#94a3b8' : '#0f172a', minWidth: '24px', textAlign: 'center' }}>
+                        {modalIsOutOfStock || modalIsMaxInBasket ? 0 : detailQuantity}
                       </span>
                       <button
                         type="button"
-                        onClick={() => setDetailQuantity(detailQuantity + 1)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: companySettings.button_color || '#0284c7', display: 'flex', alignItems: 'center', padding: 0 }}
+                        onClick={() => {
+                          if (modalIsUnlimited || detailQuantity < modalAvailableToAdd) {
+                            setDetailQuantity(prev => prev + 1);
+                          }
+                        }}
+                        disabled={modalIsOutOfStock || modalIsMaxInBasket || (!modalIsUnlimited && detailQuantity >= modalAvailableToAdd)}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          cursor: (modalIsOutOfStock || modalIsMaxInBasket || (!modalIsUnlimited && detailQuantity >= modalAvailableToAdd)) ? 'not-allowed' : 'pointer', 
+                          color: (modalIsOutOfStock || modalIsMaxInBasket || (!modalIsUnlimited && detailQuantity >= modalAvailableToAdd)) ? '#94a3b8' : (companySettings.button_color || '#0284c7'), 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          padding: 0 
+                        }}
                       >
                         <Plus size={16} />
                       </button>
@@ -2898,28 +3140,37 @@ export default function Showcase({ isPublicView = false }) {
                     <button
                       type="button"
                       onClick={handleAddDetailToBasket}
+                      disabled={modalIsOutOfStock || modalIsMaxInBasket}
                       style={{
                         flex: 1,
                         padding: '12px 18px',
                         borderRadius: '12px',
                         fontSize: '13.5px',
                         fontWeight: 800,
-                        background: companySettings.button_color 
-                          ? `linear-gradient(135deg, ${companySettings.button_color} 0%, ${companySettings.button_color}ee 100%)` 
-                          : 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
-                        color: '#ffffff',
+                        background: (modalIsOutOfStock || modalIsMaxInBasket)
+                          ? '#cbd5e1'
+                          : companySettings.button_color 
+                            ? `linear-gradient(135deg, ${companySettings.button_color} 0%, ${companySettings.button_color}ee 100%)` 
+                            : 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+                        color: (modalIsOutOfStock || modalIsMaxInBasket) ? '#64748b' : '#ffffff',
                         border: 'none',
-                        cursor: 'pointer',
+                        cursor: (modalIsOutOfStock || modalIsMaxInBasket) ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        boxShadow: `0 4px 14px ${companySettings.button_color || '#06b6d4'}40`,
+                        boxShadow: (modalIsOutOfStock || modalIsMaxInBasket) ? 'none' : `0 4px 14px ${companySettings.button_color || '#06b6d4'}40`,
                         transition: 'all 0.2s ease'
                       }}
                     >
                       <ShoppingBag size={17} />
-                      <span>AGREGAR AL PEDIDO ({detailQuantity})</span>
+                      <span>
+                        {modalIsOutOfStock 
+                          ? 'PRODUCTO AGOTADO' 
+                          : modalIsMaxInBasket 
+                            ? 'LÍMITE MÁXIMO ALCANZADO' 
+                            : `AGREGAR AL PEDIDO (${detailQuantity})`}
+                      </span>
                     </button>
                   </div>
 
@@ -2953,7 +3204,8 @@ export default function Showcase({ isPublicView = false }) {
 
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* ========================================================================= */}
       {/* 🔒 MODAL DESBLOQUEO RÁPIDO PARA EL DUEÑO 🔒 */}

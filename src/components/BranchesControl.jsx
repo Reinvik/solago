@@ -221,7 +221,7 @@ export default function BranchesControl({ setActiveTab }) {
   // Estimado de margen promedio (%)
   const avgMarginPct = 40.0;
   const breakEvenTargetPerBranch = useMemo(() => {
-    const totalBreakeven = totalFixedCostsCompany > 0 ? (totalFixedCostsCompany / (avgMarginPct / 100)) : 1000;
+    const totalBreakeven = totalFixedCostsCompany > 0 ? (totalFixedCostsCompany / (avgMarginPct / 100)) : 0;
     const branchCount = Math.max(1, branches.length);
     return totalBreakeven / branchCount;
   }, [totalFixedCostsCompany, branches]);

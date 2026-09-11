@@ -68,6 +68,11 @@ const GLOBAL_DEFAULT_EMPTY_FIXED_COSTS = {
 
 const GLOBAL_DEFAULT_EXPENSES = [];
 
+export const isLegacyMockFixedCosts = (costs) => {
+  if (!costs || typeof costs !== 'object') return false;
+  return Number(costs.rent) === 500 && Number(costs.salaries) === 1200;
+};
+
 export const isNexusOwnerAccount = (emailOrName) => {
   if (!emailOrName) return false;
   const clean = String(emailOrName).toLowerCase().trim();
@@ -915,17 +920,27 @@ export const PuntoNexusProvider = ({ children }) => {
       try {
         const parsedFC = JSON.parse(savedFixedCosts);
         if (parsedFC && (parsedFC['branch-matriz'] || parsedFC.rent !== undefined)) {
-          setFixedCostsMap(parsedFC['branch-matriz'] ? parsedFC : { 'branch-matriz': parsedFC });
+          let map = parsedFC['branch-matriz'] ? parsedFC : { 'branch-matriz': parsedFC };
+          if (isLegacyMockFixedCosts(map['branch-matriz'])) {
+            map['branch-matriz'] = { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS };
+            try { localStorage.setItem(fixedCostsKey, JSON.stringify(map)); } catch (e) {}
+          }
+          setFixedCostsMap(map);
         } else if (parsedFC) {
-          setFixedCostsMap(parsedFC);
+          let map = parsedFC;
+          if (isLegacyMockFixedCosts(map)) {
+            map = { 'branch-matriz': { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS } };
+            try { localStorage.setItem(fixedCostsKey, JSON.stringify(map)); } catch (e) {}
+          }
+          setFixedCostsMap(map);
         } else {
-          setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+          setFixedCostsMap({ 'branch-matriz': { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS } });
         }
       } catch (e) {
-        setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+        setFixedCostsMap({ 'branch-matriz': { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS } });
       }
     } else {
-      setFixedCostsMap({ 'branch-matriz': GLOBAL_DEFAULT_FIXED_COSTS });
+      setFixedCostsMap({ 'branch-matriz': { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS } });
     }
 
     const expensesKey = `punto_nexus_expenses_${companyId}`;
@@ -933,13 +948,20 @@ export const PuntoNexusProvider = ({ children }) => {
     if (savedExpenses) {
       try {
         const parsedExp = JSON.parse(savedExpenses);
-        if (Array.isArray(parsedExp)) setExpenses(parsedExp);
-        else setExpenses(GLOBAL_DEFAULT_EXPENSES);
+        if (Array.isArray(parsedExp)) {
+          const cleanExp = parsedExp.filter(e => e.id !== 'exp-1' && e.id !== 'exp-2' && e.id !== 'exp-3' && !e.description?.includes('Arriendo de Local Comercial'));
+          setExpenses(cleanExp);
+          if (cleanExp.length !== parsedExp.length) {
+            try { localStorage.setItem(expensesKey, JSON.stringify(cleanExp)); } catch (e) {}
+          }
+        } else {
+          setExpenses([]);
+        }
       } catch (e) {
-        setExpenses(GLOBAL_DEFAULT_EXPENSES);
+        setExpenses([]);
       }
     } else {
-      setExpenses(GLOBAL_DEFAULT_EXPENSES);
+      setExpenses([]);
     }
 
     // 5. Cargar Inventario y Ventas locales para esta empresa
@@ -4197,14 +4219,26 @@ export const PuntoNexusProvider = ({ children }) => {
       try {
         const parsed = JSON.parse(savedMap);
         if (parsed && (parsed['branch-matriz'] || parsed.rent !== undefined)) {
-          return parsed['branch-matriz'] ? parsed : { 'branch-matriz': parsed };
+          const map = parsed['branch-matriz'] ? parsed : { 'branch-matriz': parsed };
+          if (isLegacyMockFixedCosts(map['branch-matriz'])) {
+            map['branch-matriz'] = { ...GLOBAL_DEFAULT_EMPTY_FIXED_COSTS };
+            try { localStorage.setItem(mapKey, JSON.stringify(map)); } catch (e) {}
+          }
+          return map;
         }
       } catch (e) {}
     }
     const legacySaved = localStorage.getItem(`punto_nexus_fixed_costs_${companyId || 'default'}`);
-    const legacyCosts = legacySaved ? JSON.parse(legacySaved) : GLOBAL_DEFAULT_FIXED_COSTS;
+    if (legacySaved) {
+      try {
+        const legacyCosts = JSON.parse(legacySaved);
+        if (legacyCosts && !isLegacyMockFixedCosts(legacyCosts)) {
+          return { 'branch-matriz': legacyCosts };
+        }
+      } catch (e) {}
+    }
     return {
-      'branch-matriz': legacyCosts
+      'branch-matriz': { ...GLOBAL_DEFAULT_FIXED_COSTS }
     };
   });
 
@@ -4217,30 +4251,38 @@ export const PuntoNexusProvider = ({ children }) => {
       return GLOBAL_DEFAULT_FIXED_COSTS;
     }
     return GLOBAL_DEFAULT_EMPTY_FIXED_COSTS;
-  }, [fixedCostsMap, activeBranchId, GLOBAL_DEFAULT_FIXED_COSTS, GLOBAL_DEFAULT_EMPTY_FIXED_COSTS]);
+  }, [fixedCostsMap, activeBranchId]);
 
   const [expenses, setExpenses] = useState(() => {
     const saved = localStorage.getItem(`punto_nexus_expenses_${companyId || 'default'}`);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(e => e.id !== 'exp-1' && e.id !== 'exp-2' && e.id !== 'exp-3' && !e.description?.includes('Arriendo de Local Comercial'));
+        }
       } catch (e) {}
     }
     return GLOBAL_DEFAULT_EXPENSES;
   });
 
-  const updateFixedCosts = (newCosts) => {
-    const bId = activeBranchId || 'branch-matriz';
+  const updateFixedCosts = (newCosts, targetBranchId = null) => {
+    const bId = targetBranchId || activeBranchId || 'branch-matriz';
     setFixedCostsMap(prev => {
       const current = prev[bId] || (bId === 'branch-matriz' ? GLOBAL_DEFAULT_FIXED_COSTS : GLOBAL_DEFAULT_EMPTY_FIXED_COSTS);
-      const updatedBranchCosts = { ...current, ...newCosts };
+      const cleanCosts = {};
+      Object.keys(newCosts || {}).forEach(k => {
+        cleanCosts[k] = Math.max(0, Number(newCosts[k]) || 0);
+      });
+      const updatedBranchCosts = { ...current, ...cleanCosts };
       const updatedMap = { ...prev, [bId]: updatedBranchCosts };
       if (companyId) {
-        localStorage.setItem(`punto_nexus_fixed_costs_by_branch_${companyId}`, JSON.stringify(updatedMap));
-        if (bId === 'branch-matriz') {
-          localStorage.setItem(`punto_nexus_fixed_costs_${companyId}`, JSON.stringify(updatedBranchCosts));
-        }
+        try {
+          localStorage.setItem(`punto_nexus_fixed_costs_by_branch_${companyId}`, JSON.stringify(updatedMap));
+          if (bId === 'branch-matriz') {
+            localStorage.setItem(`punto_nexus_fixed_costs_${companyId}`, JSON.stringify(updatedBranchCosts));
+          }
+        } catch (e) {}
       }
       return updatedMap;
     });

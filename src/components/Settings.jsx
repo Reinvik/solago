@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { supabase } from '../utils/supabaseClient';
-import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator } from 'lucide-react';
 import ExchangeRateChart from './ExchangeRateChart';
+import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { isSoundEnabled, setSoundEnabled, playSound } from '../utils/soundEffects';
 
 const GIROS_COMERCIALES = [
@@ -73,10 +74,78 @@ const GIROS_COMERCIALES = [
 ];
 
 export default function Settings({ onOpenProfileModal }) {
-  const { companySettings, updateCompanySettings, companyName, setCompanyName, updateCompanyName, syncExchangeRate, rateHistory, bcvRate, paraleloRate, euroRate, bcvLastUpdated, loading, branches = [], activeBranchId, switchBranch, addBranch } = usePuntoNexus();
+  const { 
+    companySettings, 
+    updateCompanySettings, 
+    companyName, 
+    setCompanyName, 
+    updateCompanyName, 
+    syncExchangeRate, 
+    rateHistory, 
+    bcvRate, 
+    paraleloRate, 
+    euroRate, 
+    bcvLastUpdated, 
+    loading, 
+    branches = [], 
+    activeBranchId, 
+    switchBranch, 
+    addBranch,
+    fixedCosts = {},
+    updateFixedCosts,
+    formatCurrency
+  } = usePuntoNexus();
 
   const currentGiro = companySettings.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
   const selectedGiroObj = GIROS_COMERCIALES.find(g => g.id === currentGiro) || GIROS_COMERCIALES[0];
+
+  // ─── Gestión de Costos Fijos Base de la Empresa ───
+  const [fixedCostsForm, setFixedCostsForm] = useState({
+    rent: fixedCosts?.rent || 0,
+    salaries: fixedCosts?.salaries || 0,
+    services: fixedCosts?.services || 0,
+    software: fixedCosts?.software || 0,
+    marketing: fixedCosts?.marketing || 0,
+    other: fixedCosts?.other || 0
+  });
+  const [savedFixedCostsMsg, setSavedFixedCostsMsg] = useState(null);
+
+  useEffect(() => {
+    setFixedCostsForm({
+      rent: fixedCosts?.rent || 0,
+      salaries: fixedCosts?.salaries || 0,
+      services: fixedCosts?.services || 0,
+      software: fixedCosts?.software || 0,
+      marketing: fixedCosts?.marketing || 0,
+      other: fixedCosts?.other || 0
+    });
+  }, [fixedCosts]);
+
+  const totalFixedCostsSettings = useMemo(() => {
+    return (
+      Number(fixedCostsForm.rent || 0) +
+      Number(fixedCostsForm.salaries || 0) +
+      Number(fixedCostsForm.services || 0) +
+      Number(fixedCostsForm.software || 0) +
+      Number(fixedCostsForm.marketing || 0) +
+      Number(fixedCostsForm.other || 0)
+    );
+  }, [fixedCostsForm]);
+
+  const handleSaveFixedCostsSettings = (e) => {
+    if (e) e.preventDefault();
+    updateFixedCosts(fixedCostsForm);
+    setSavedFixedCostsMsg('¡Costos fijos actualizados y guardados!');
+    setTimeout(() => setSavedFixedCostsMsg(null), 2500);
+  };
+
+  const handleResetFixedCostsToZero = () => {
+    const zeroCosts = { rent: 0, salaries: 0, services: 0, software: 0, marketing: 0, other: 0 };
+    setFixedCostsForm(zeroCosts);
+    updateFixedCosts(zeroCosts);
+    setSavedFixedCostsMsg('¡Costos fijos restablecidos a $0 (sin costos asumidos)!');
+    setTimeout(() => setSavedFixedCostsMsg(null), 2500);
+  };
 
   // ─── Sincronización manual de sucursales desde Supabase ───
   const [syncingBranches, setSyncingBranches] = useState(false);
@@ -86,7 +155,7 @@ export default function Settings({ onOpenProfileModal }) {
   // ─── Pestañas de Configuración y Navegación Rápida ───
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('punto_nexus_settings_tab');
-    const validTabs = ['empresa', 'marca', 'impuestos', 'moneda', 'sistema'];
+    const validTabs = ['empresa', 'marca', 'costos', 'impuestos', 'moneda', 'sistema'];
     return validTabs.includes(saved) ? saved : 'empresa';
   });
 
@@ -113,6 +182,12 @@ export default function Settings({ onOpenProfileModal }) {
       label: 'Marca & Menú QR',
       icon: Palette,
       badge: 'QR & Logo'
+    },
+    {
+      id: 'costos',
+      label: 'Costos Fijos',
+      icon: Calculator,
+      badge: totalFixedCostsSettings > 0 ? `$${totalFixedCostsSettings}` : '$0'
     },
     {
       id: 'impuestos',
@@ -914,6 +989,179 @@ export default function Settings({ onOpenProfileModal }) {
           </div>
         </div>
 
+      </div>
+    </div>
+  )}
+
+  {/* ─── PESTAÑA: COSTOS FIJOS ─── */}
+  {activeTab === 'costos' && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease' }}>
+      <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-cyan)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calculator size={18} />
+              Plantilla de Costos Fijos Base de la Empresa
+            </h3>
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
+              Define los costos fijos mensuales asumidos por tu negocio. Por defecto todos inician en $0.00 para que ningún costo venga asumido por error.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={handleResetFixedCostsToZero}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '10px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#ef4444',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '12px'
+              }}
+            >
+              Restablecer todo a $0
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveFixedCostsSettings}
+              style={{
+                padding: '8px 18px',
+                borderRadius: '10px',
+                background: 'var(--color-cyan)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 800,
+                fontSize: '12.5px',
+                boxShadow: '0 4px 12px rgba(6, 182, 212, 0.3)'
+              }}
+            >
+              Guardar Costos Fijos
+            </button>
+          </div>
+        </div>
+
+        {savedFixedCostsMsg && (
+          <div style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.1)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '12.5px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Check size={16} /> {savedFixedCostsMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSaveFixedCostsSettings}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>🏠 Arriendo / Alquiler ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.rent !== undefined && fixedCostsForm.rent !== null ? fixedCostsForm.rent : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, rent: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Costo de arrendamiento mensual del local o tienda</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>👥 Sueldos y Nómina Fija ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.salaries !== undefined && fixedCostsForm.salaries !== null ? fixedCostsForm.salaries : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, salaries: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Salarios de empleados y colaboradores fijos</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>⚡ Servicios Públicos Fijos ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.services !== undefined && fixedCostsForm.services !== null ? fixedCostsForm.services : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, services: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Estimación mensual de electricidad, agua, internet, etc.</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>💻 Software y POS ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.software !== undefined && fixedCostsForm.software !== null ? fixedCostsForm.software : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, software: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Licencias de sistemas, nube, dominio y software</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>📢 Publicidad y Marketing Fijo ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.marketing !== undefined && fixedCostsForm.marketing !== null ? fixedCostsForm.marketing : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, marketing: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Pauta mensual en redes sociales o marketing recurrente</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>📦 Otros Costos Fijos ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className="form-input"
+                placeholder="0"
+                value={fixedCostsForm.other !== undefined && fixedCostsForm.other !== null ? fixedCostsForm.other : ''}
+                onChange={(e) => setFixedCostsForm({ ...fixedCostsForm, other: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Contabilidad, seguros o mantenimientos periódicos</span>
+            </div>
+          </div>
+
+          {/* Resumen Total de Costos Fijos */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(2, 132, 199, 0.08) 100%)',
+            border: '1px solid rgba(6, 182, 212, 0.3)',
+            borderRadius: '14px',
+            padding: '16px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>TOTAL COSTOS FIJOS MENSUALES ESTIMADOS:</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                {totalFixedCostsSettings === 0 ? 'Sin costos fijos asignados ($0.00)' : 'Suma de los 6 conceptos recurrentes de la empresa'}
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <DualCurrencyDisplay amount={totalFixedCostsSettings} fontSize="20px" primaryColor="var(--color-cyan)" showSwap={false} align="right" />
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   )}

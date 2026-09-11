@@ -96,8 +96,19 @@ export default function FinanceModule() {
   // ---------------------------------------------------------
   const [isEditingFixedCosts, setIsEditingFixedCosts] = useState(false);
   const [tempFixedCosts, setTempFixedCosts] = useState({ ...fixedCosts });
+  const [isEditingModalFixedCosts, setIsEditingModalFixedCosts] = useState(false);
+  const [modalTempFixedCosts, setModalTempFixedCosts] = useState({ ...fixedCosts });
   const [manualMarginPct, setManualMarginPct] = useState(null);
   const [desiredProfitGoal, setDesiredProfitGoal] = useState(0);
+
+  useEffect(() => {
+    if (!isEditingFixedCosts) {
+      setTempFixedCosts({ ...fixedCosts });
+    }
+    if (!isEditingModalFixedCosts) {
+      setModalTempFixedCosts({ ...fixedCosts });
+    }
+  }, [fixedCosts, isEditingFixedCosts, isEditingModalFixedCosts]);
 
   // Costos Fijos Estructurales Recurrentes (Se repiten de plantilla mes a mes)
   const structuralFixedCosts = useMemo(() => {
@@ -973,16 +984,27 @@ export default function FinanceModule() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{
-                    background: '#f8fafc',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ fontSize: '12px', fontWeight: 650, color: '#64748b' }}>Costos Fijos</span>
+                  <div 
+                    onClick={() => {
+                      setTempFixedCosts({ ...fixedCosts });
+                      setIsEditingFixedCosts(true);
+                    }}
+                    title="Haz clic para editar los costos fijos de plantilla"
+                    style={{
+                      background: '#f8fafc',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '1px solid #e2e8f0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 650, color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      Costos Fijos <Edit3 size={12} color="var(--color-cyan)" />
+                    </span>
                     <DualCurrencyDisplay amount={totalFixedCosts} fontSize="14px" primaryColor="#0f172a" showSwap={false} align="right" />
                   </div>
 
@@ -1143,80 +1165,102 @@ export default function FinanceModule() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>Arriendo / Alquiler ($)</label>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>🏠 Arriendo / Alquiler ($)</label>
                         <input
                           type="number"
                           className="form-input"
-                          value={tempFixedCosts.rent || ''}
-                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, rent: Number(e.target.value) })}
+                          value={tempFixedCosts.rent !== undefined && tempFixedCosts.rent !== null ? tempFixedCosts.rent : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, rent: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
                           placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>Sueldos / Nómina Fija ($)</label>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>👥 Sueldos / Nómina Fija ($)</label>
                         <input
                           type="number"
                           className="form-input"
-                          value={tempFixedCosts.salaries || ''}
-                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, salaries: Number(e.target.value) })}
+                          value={tempFixedCosts.salaries !== undefined && tempFixedCosts.salaries !== null ? tempFixedCosts.salaries : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, salaries: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
                           placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>Software y POS ($)</label>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>⚡ Servicios Públicos Fijos ($)</label>
                         <input
                           type="number"
                           className="form-input"
-                          value={tempFixedCosts.software || ''}
-                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, software: Number(e.target.value) })}
+                          value={tempFixedCosts.services !== undefined && tempFixedCosts.services !== null ? tempFixedCosts.services : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, services: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
                           placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>Publicidad Fija ($)</label>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>💻 Software y POS ($)</label>
                         <input
                           type="number"
                           className="form-input"
-                          value={tempFixedCosts.marketing || ''}
-                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, marketing: Number(e.target.value) })}
+                          value={tempFixedCosts.software !== undefined && tempFixedCosts.software !== null ? tempFixedCosts.software : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, software: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
                           placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>Otros Fijos ($)</label>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>📢 Publicidad Fija ($)</label>
                         <input
                           type="number"
                           className="form-input"
-                          value={tempFixedCosts.other || ''}
-                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, other: Number(e.target.value) })}
+                          value={tempFixedCosts.marketing !== undefined && tempFixedCosts.marketing !== null ? tempFixedCosts.marketing : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, marketing: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                          placeholder="0"
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '4px' }}>📦 Otros Fijos ($)</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          value={tempFixedCosts.other !== undefined && tempFixedCosts.other !== null ? tempFixedCosts.other : ''}
+                          onChange={(e) => setTempFixedCosts({ ...tempFixedCosts, other: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
                           placeholder="0"
                           style={{ width: '100%', padding: '8px 10px', borderRadius: '8px' }}
                         />
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                       <button
                         type="button"
-                        onClick={() => setIsEditingFixedCosts(false)}
-                        style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                        onClick={() => setTempFixedCosts({ rent: 0, salaries: 0, services: 0, software: 0, marketing: 0, other: 0 })}
+                        style={{ padding: '7px 12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer', fontWeight: 700, fontSize: '11.5px' }}
                       >
-                        Cancelar
+                        Poner todo en $0
                       </button>
-                      <button
-                        type="submit"
-                        style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--color-cyan)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 900, fontSize: '12px' }}
-                      >
-                        Guardar Plantilla Fija
-                      </button>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingFixedCosts(false)}
+                          style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--color-cyan)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 900, fontSize: '12px' }}
+                        >
+                          Guardar Plantilla Fija
+                        </button>
+                      </div>
                     </div>
                   </form>
                 ) : (
@@ -2249,23 +2293,161 @@ export default function FinanceModule() {
             {/* Contenido según Pestaña */}
             {egresosModalSubTab === 'FIJOS' && (
               <div>
-                <h4 style={{ fontSize: '13px', fontWeight: 800, marginBottom: '10px', color: '#0f172a' }}>Costos Fijos de la Sucursal</h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left' }}>
-                      <th style={{ padding: '8px' }}>CONCEPTO / COSTO FIJO</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>MONTO MENSUAL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expensesBreakdown.fijos.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px', fontWeight: 700 }}>{item.name}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>{formatCurrency(item.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 800, margin: 0, color: '#0f172a' }}>Costos Fijos Mensuales</h4>
+                    <span style={{ fontSize: '11.5px', color: '#64748b' }}>Plantilla base recurrente de la empresa</span>
+                  </div>
+
+                  {!isEditingModalFixedCosts ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalTempFixedCosts({ ...fixedCosts });
+                        setIsEditingModalFixedCosts(true);
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(6, 182, 212, 0.12)',
+                        border: '1px solid rgba(6, 182, 212, 0.3)',
+                        color: 'var(--color-cyan)',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Edit3 size={14} /> Editar Costos Fijos
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setModalTempFixedCosts({ rent: 0, salaries: 0, services: 0, software: 0, marketing: 0, other: 0 })}
+                        style={{ padding: '6px 10px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.25)', cursor: 'pointer', fontSize: '11.5px', fontWeight: 700 }}
+                      >
+                        Poner en $0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingModalFixedCosts(false)}
+                        style={{ padding: '6px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '11.5px', fontWeight: 700 }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateFixedCosts(modalTempFixedCosts);
+                          setIsEditingModalFixedCosts(false);
+                        }}
+                        style={{ padding: '6px 14px', borderRadius: '8px', background: 'var(--color-cyan)', color: '#ffffff', border: 'none', cursor: 'pointer', fontSize: '11.5px', fontWeight: 800 }}
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isEditingModalFixedCosts ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>🏠 Arriendo / Alquiler ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.rent !== undefined && modalTempFixedCosts.rent !== null ? modalTempFixedCosts.rent : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, rent: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>👥 Sueldos y Nómina ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.salaries !== undefined && modalTempFixedCosts.salaries !== null ? modalTempFixedCosts.salaries : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, salaries: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>⚡ Servicios Públicos Fijos ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.services !== undefined && modalTempFixedCosts.services !== null ? modalTempFixedCosts.services : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, services: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>💻 Software y POS ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.software !== undefined && modalTempFixedCosts.software !== null ? modalTempFixedCosts.software : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, software: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>📢 Publicidad Fija ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.marketing !== undefined && modalTempFixedCosts.marketing !== null ? modalTempFixedCosts.marketing : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, marketing: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>📦 Otros Fijos ($)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={modalTempFixedCosts.other !== undefined && modalTempFixedCosts.other !== null ? modalTempFixedCosts.other : ''}
+                        onChange={(e) => setModalTempFixedCosts({ ...modalTempFixedCosts, other: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', background: '#ffffff' }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left' }}>
+                          <th style={{ padding: '8px' }}>CONCEPTO / COSTO FIJO</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>MONTO MENSUAL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expensesBreakdown.fijos.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '8px', fontWeight: 700 }}>{item.name}</td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: item.amount > 0 ? '#ef4444' : '#64748b' }}>
+                              {formatCurrency(item.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {expensesBreakdown.fijos.every(item => Number(item.amount) === 0) && (
+                      <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(6, 182, 212, 0.08)', color: 'var(--color-cyan)', fontSize: '12px', fontWeight: 650, textAlign: 'center' }}>
+                        ✓ Todos los costos fijos inician en $0.00 (sin costos asumidos). Haz clic en "Editar Costos Fijos" para configurar los de tu negocio.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
