@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { usePuntoNexus } from '../context/PuntoNexusContext';
+import { usePuntoNexus, isNexusOwnerAccount } from '../context/PuntoNexusContext';
 import { X, Lock, User, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function UserProfileModal({ isOpen, onClose }) {
@@ -237,7 +237,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
                 fontSize: '13px'
               }}
             >
-              {['nexusowner', 'nexus_owner', 'owner'].includes((user?.role || '').toLowerCase()) && (
+              {(isNexusOwnerAccount(user?.email) || isNexusOwnerAccount(user?.name) || ['nexusowner', 'nexus_owner', 'owner', 'superuser', 'super_admin'].includes((user?.role || '').toLowerCase())) && (
                 <option value="nexusowner">👑 Nexus Owner (Super Admin)</option>
               )}
               <option value="admin">👑 Administrador / Dueño (Acceso total & cambio de sucursales)</option>

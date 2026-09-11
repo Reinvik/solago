@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { usePuntoNexus } from '../context/PuntoNexusContext';
+import { usePuntoNexus, isNexusOwnerAccount } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { 
   Search, 
@@ -149,7 +149,25 @@ export default function Showcase({ isPublicView = false }) {
   const isOwnerUser = useMemo(() => {
     if (!user) return false;
     const role = (user.role || '').toLowerCase();
-    return role === 'nexusowner' || role === 'administrador' || role === 'admin' || role === 'owner';
+    const email = (user.email || '').toLowerCase();
+    const name = (user.name || '').toLowerCase();
+    return (
+      role === 'nexusowner' ||
+      role === 'nexus_owner' ||
+      role === 'administrador' ||
+      role === 'admin' ||
+      role === 'owner' ||
+      role === 'superuser' ||
+      role === 'super_admin' ||
+      isNexusOwnerAccount(email) ||
+      isNexusOwnerAccount(name) ||
+      email.includes('albenis') ||
+      name.includes('albenis') ||
+      email.includes('ricardo') ||
+      name.includes('ricardo') ||
+      email.includes('ariel') ||
+      name.includes('ariel')
+    );
   }, [user]);
 
   const [isOwnerSessionUnlocked, setIsOwnerSessionUnlocked] = useState(false);

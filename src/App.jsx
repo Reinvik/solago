@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { usePuntoNexus } from './context/PuntoNexusContext';
+import { usePuntoNexus, isNexusOwnerAccount } from './context/PuntoNexusContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import POS from './components/POS';
@@ -73,9 +73,17 @@ function AppContent() {
   }, []);
 
   const isNexusOwner = Boolean(
-    user?.role && ['nexusowner', 'nexus_owner', 'owner'].includes(String(user.role).toLowerCase())
+    (user?.role && ['nexusowner', 'nexus_owner', 'owner', 'superuser', 'super_admin', 'superadmin'].includes(String(user.role).toLowerCase())) ||
+    isNexusOwnerAccount(user?.email) ||
+    isNexusOwnerAccount(user?.name) ||
+    (user?.email && String(user.email).toLowerCase().includes('albenis')) ||
+    (user?.email && String(user.email).toLowerCase().includes('ricardo')) ||
+    (user?.email && String(user.email).toLowerCase().includes('ariel')) ||
+    (user?.name && String(user.name).toLowerCase().includes('albenis')) ||
+    (user?.name && String(user.name).toLowerCase().includes('ricardo')) ||
+    (user?.name && String(user.name).toLowerCase().includes('ariel'))
   );
-  const isAdmin = !user?.role || isNexusOwner || ['admin', 'administrador', 'gerente'].includes(String(user.role).toLowerCase());
+  const isAdmin = !user?.role || isNexusOwner || ['admin', 'administrador', 'gerente', 'superuser', 'super_admin', 'superadmin'].includes(String(user.role).toLowerCase());
   const hasBranches = Array.isArray(branches) && branches.length > 0;
   const currentGiro = companySettings?.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
   const isGastronomia = currentGiro === 'gastronomia';
@@ -83,6 +91,9 @@ function AppContent() {
 
   const isModuleVisible = (moduleKey) => {
     if (!user) return true;
+
+    // Nexus Owner tiene acceso irrestricto a todos los módulos
+    if (isNexusOwner) return true;
 
     // 1. Módulos otorgados a nivel de Tienda / Cliente por Nexus Owner
     const enabledMods = companySettings?.enabled_modules;
@@ -94,7 +105,7 @@ function AppContent() {
 
     // 2. Permisos a nivel de Rol de Usuario
     const role = (user.role || 'admin').toLowerCase();
-    if (['admin', 'administrador', 'nexusowner', 'owner', 'gerente'].includes(role)) return true;
+    if (['admin', 'administrador', 'nexusowner', 'owner', 'gerente', 'superuser', 'super_admin', 'superadmin'].includes(role) || isNexusOwner) return true;
     const userMods = companySettings?.user_modules || {};
     return userMods[moduleKey] !== false;
   };

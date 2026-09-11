@@ -123,14 +123,15 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" htmlFor="email" style={{ color: '#94a3b8' }}>Correo Electrónico</label>
+              <label className="form-label" htmlFor="email" style={{ color: '#94a3b8' }}>Correo Electrónico o Usuario</label>
               <div className="login-dark-input-wrapper">
                 <Mail size={18} className="login-dark-input-icon" />
                 <input
                   id="email"
-                  type="email"
+                  type="text"
+                  autoComplete="username"
                   className="login-dark-input"
-                  placeholder="usuario@solago.com.ve"
+                  placeholder="usuario@solago.com.ve o usuario"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
