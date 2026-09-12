@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
-import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight, FileText, Palette } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
+import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants } from '../utils/productSpecs';
 
 export default function Inventory() {
   const { 
@@ -394,7 +394,9 @@ export default function Inventory() {
     payment_type: 'contado', // 'contado' | 'cuenta_por_pagar'
     supplier: '',
     expiration_days: '10',
-    is_exempt: false
+    is_exempt: false,
+    has_variants: false,
+    variants: []
   });
 
   const [replenishForm, setReplenishForm] = useState({
@@ -463,6 +465,96 @@ export default function Inventory() {
       quantity: val,
       stock: val,
       cost_total: String(parseFloat(total))
+    }));
+  };
+
+  const PRESET_COLORS = [
+    { name: 'Negro', hex: '#1e293b' },
+    { name: 'Blanco', hex: '#ffffff' },
+    { name: 'Gris Ceniza', hex: '#9ca3af' },
+    { name: 'Gris Oscuro', hex: '#4b5563' },
+    { name: 'Beige Arena', hex: '#e8d8c3' },
+    { name: 'Azul Petróleo', hex: '#1e3a8a' },
+    { name: 'Azul Marino', hex: '#0f172a' },
+    { name: 'Rojo Terracota', hex: '#b91c1c' },
+    { name: 'Verde Oliva', hex: '#15803d' },
+    { name: 'Marrón Café', hex: '#78350f' },
+    { name: 'Mostaza', hex: '#d97706' },
+    { name: 'Rosa Palo', hex: '#f472b6' }
+  ];
+
+  const handleToggleVariants = (enabled) => {
+    if (enabled) {
+      const currentVars = (productForm.variants && productForm.variants.length > 0)
+        ? productForm.variants
+        : [
+            { id: `var-${Date.now()}-1`, color: 'Beige Arena', stock: Math.max(1, Math.floor(Number(productForm.quantity) / 2) || 5), hex: '#e8d8c3', sku: '', image_url: '' },
+            { id: `var-${Date.now()}-2`, color: 'Gris Ceniza', stock: Math.max(1, Math.ceil(Number(productForm.quantity) / 2) || 5), hex: '#9ca3af', sku: '', image_url: '' }
+          ];
+      const totalQty = getTotalVariantsStock(currentVars);
+      const cost = Number(productForm.cost_price) || 0;
+      setProductForm(prev => ({
+        ...prev,
+        has_variants: true,
+        variants: currentVars,
+        quantity: String(totalQty),
+        cost_total: String(parseFloat((cost * totalQty).toFixed(2)))
+      }));
+    } else {
+      setProductForm(prev => ({
+        ...prev,
+        has_variants: false
+      }));
+    }
+  };
+
+  const handleAddVariant = (preset = null) => {
+    const defaultColor = preset ? preset.name : '';
+    const defaultHex = preset ? preset.hex : '#64748b';
+    const newVariant = {
+      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      color: defaultColor,
+      stock: 5,
+      hex: defaultHex,
+      sku: '',
+      image_url: ''
+    };
+    const nextVariants = [...(productForm.variants || []), newVariant];
+    const totalQty = getTotalVariantsStock(nextVariants);
+    const cost = Number(productForm.cost_price) || 0;
+    setProductForm(prev => ({
+      ...prev,
+      has_variants: true,
+      variants: nextVariants,
+      quantity: String(totalQty),
+      cost_total: String(parseFloat((cost * totalQty).toFixed(2)))
+    }));
+  };
+
+  const handleUpdateVariant = (index, field, value) => {
+    const nextVariants = [...(productForm.variants || [])];
+    if (!nextVariants[index]) return;
+    nextVariants[index] = { ...nextVariants[index], [field]: value };
+    const totalQty = getTotalVariantsStock(nextVariants);
+    const cost = Number(productForm.cost_price) || 0;
+    setProductForm(prev => ({
+      ...prev,
+      variants: nextVariants,
+      quantity: String(totalQty),
+      cost_total: String(parseFloat((cost * totalQty).toFixed(2)))
+    }));
+  };
+
+  const handleRemoveVariant = (index) => {
+    const nextVariants = (productForm.variants || []).filter((_, i) => i !== index);
+    const totalQty = getTotalVariantsStock(nextVariants);
+    const cost = Number(productForm.cost_price) || 0;
+    setProductForm(prev => ({
+      ...prev,
+      variants: nextVariants,
+      has_variants: nextVariants.length > 0,
+      quantity: String(totalQty),
+      cost_total: String(parseFloat((cost * totalQty).toFixed(2)))
     }));
   };
 
@@ -657,7 +749,9 @@ export default function Inventory() {
       payment_type: 'contado',
       supplier: '',
       expiration_days: '30',
-      is_exempt: false
+      is_exempt: false,
+      has_variants: false,
+      variants: []
     });
     setShowProductModal(true);
   };
@@ -690,12 +784,19 @@ export default function Inventory() {
         marginPct = netSell > 0 ? (((netSell - costPrice) / netSell) * 100).toFixed(1) : '0';
       }
     }
+
+    const productVariants = specs.variants && specs.variants.length > 0
+      ? specs.variants
+      : normalizeVariants(product.variants);
+    const hasActiveVariants = productVariants.length > 0;
+    const currentStockVal = hasActiveVariants ? getTotalVariantsStock(productVariants) : (product.stock || 0);
+
     setProductForm({
       name: product.name || '',
       unit: product.unit || 'Kg.',
-      quantity: String(product.stock || 0),
+      quantity: String(currentStockVal),
       cost_price: String(product.cost_price || 0),
-      cost_total: String((product.cost_price || 0) * (product.stock || 0)),
+      cost_total: String((product.cost_price || 0) * currentStockVal),
       sell_price: String(product.sell_price || 0),
       margin_pct: marginPct,
       category: product.category || '',
@@ -710,7 +811,9 @@ export default function Inventory() {
       payment_type: product.payment_type || 'contado',
       supplier: product.supplier || '',
       expiration_days: String(product.expiration_days || 10),
-      is_exempt: isExempt
+      is_exempt: isExempt,
+      has_variants: hasActiveVariants,
+      variants: productVariants
     });
     setShowProductModal(true);
   };
@@ -746,12 +849,16 @@ export default function Inventory() {
       ? currentImages
       : (productForm.image_url ? [productForm.image_url] : []);
 
+    const productVariants = productForm.has_variants ? normalizeVariants(productForm.variants) : [];
+    const totalVariantStock = productVariants.length > 0 ? getTotalVariantsStock(productVariants) : (Number(productForm.quantity) || 0);
+
     const serializedSpecs = serializeProductSpecs({
       description: productForm.description || '',
       dimensions: productForm.dimensions || '',
       materials: productForm.materials || '',
       owner_notes: productForm.owner_notes || '',
-      images: allImages
+      images: allImages,
+      variants: productVariants
     });
 
     const payload = {
@@ -759,7 +866,7 @@ export default function Inventory() {
       unit: productForm.unit,
       cost_price: Number(productForm.cost_price) || 0,
       sell_price: Number(productForm.sell_price) || 0,
-      stock: Number(productForm.quantity) || 0,
+      stock: totalVariantStock,
       min_stock: minStockVal,
       category: productForm.category,
       sku: productForm.sku,
@@ -769,6 +876,7 @@ export default function Inventory() {
       dimensions: productForm.dimensions || '',
       materials: productForm.materials || '',
       owner_notes: productForm.owner_notes || '',
+      variants: productVariants,
       payment_type: productForm.payment_type,
       supplier: productForm.supplier,
       expiration_days: Number(productForm.expiration_days) || 10,
@@ -1347,6 +1455,46 @@ export default function Inventory() {
                                 {isOutOfStock ? 'Sin stock disponible' : `Stock crítico (Mínimo: ${product.min_stock})`}
                               </span>
                             )}
+                            {(() => {
+                              const variants = getProductVariants(product);
+                              if (variants.length === 0) return null;
+                              return (
+                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <Palette size={12} style={{ color: '#16a34a' }} />
+                                    <span>Colores disponibles ({variants.length}):</span>
+                                  </span>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                    {variants.map((v, idx) => {
+                                      const vStock = Number(v.stock || 0);
+                                      const isOut = vStock <= 0;
+                                      return (
+                                        <span
+                                          key={v.id || idx}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            padding: '2px 7px',
+                                            borderRadius: '6px',
+                                            background: isOut ? '#fef2f2' : '#f0fdf4',
+                                            border: isOut ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                                            fontSize: '10.5px',
+                                            fontWeight: 700,
+                                            color: isOut ? '#b91c1c' : '#166534'
+                                          }}
+                                          title={`Color ${v.color}: ${vStock} unidades disponibles en inventario`}
+                                        >
+                                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: v.hex || '#64748b', border: '1px solid rgba(0,0,0,0.15)', display: 'inline-block' }} />
+                                          <span>{v.color}:</span>
+                                          <strong style={{ fontWeight: 850 }}>{isOut ? 'Agotado' : `${vStock} unids`}</strong>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </td>
@@ -1357,6 +1505,27 @@ export default function Inventory() {
                         }`} style={{ background: 'transparent', border: '1px solid currentColor' }}>
                           {isService ? 'Servicio' : product.stock}
                         </span>
+                        {(() => {
+                          const variants = getProductVariants(product);
+                          if (variants.length === 0) return null;
+                          return (
+                            <div style={{ marginTop: '4px', textAlign: 'center' }}>
+                              <span style={{ 
+                                fontSize: '9.5px', 
+                                background: '#dcfce7', 
+                                color: '#15803d', 
+                                border: '1px solid #86efac', 
+                                padding: '2px 6px', 
+                                borderRadius: '5px', 
+                                fontWeight: 800,
+                                display: 'inline-block',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                🎨 Suma de {variants.length} colores
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
                         {isService ? '-' : <DualCurrencyDisplay amount={product.cost_price} fontSize="13px" primaryColor="#94a3b8" align="right" showSwap={false} />}
@@ -1884,21 +2053,253 @@ export default function Inventory() {
                   <span>Stock y Precios</span>
                 </div>
 
+                {/* 🎨 SECCIÓN VARIANTES DE COLOR CON STOCK INDEPENDIENTE 🎨 */}
+                <div style={{
+                  background: productForm.has_variants ? '#f0fdf4' : '#ffffff',
+                  border: productForm.has_variants ? '1.5px solid #86efac' : '1px solid #e2e8f0',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  marginBottom: '16px',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: productForm.has_variants ? '#dcfce7' : '#e0f2fe', color: productForm.has_variants ? '#16a34a' : '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Palette size={18} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', display: 'block' }}>
+                          🎨 Colores Disponibles y Cantidad de Inventario por Color
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          El cliente puede elegir el color en la tienda online o POS (ej: muebles, ropa, alfombras). Cada color descuenta su propia cantidad disponible en inventario.
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleVariants(!productForm.has_variants)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        border: 'none',
+                        cursor: 'pointer',
+                        background: productForm.has_variants ? '#16a34a' : '#0284c7',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.08)'
+                      }}
+                    >
+                      {productForm.has_variants ? <Check size={14} /> : <Plus size={14} />}
+                      <span>{productForm.has_variants ? 'Colores Activos' : 'Activar Colores'}</span>
+                    </button>
+                  </div>
+
+                  {productForm.has_variants && (
+                    <div style={{ marginTop: '14px', borderTop: '1px solid #bbf7d0', paddingTop: '12px' }}>
+                      {/* Paleta rápida de tonos populares */}
+                      <div style={{ marginBottom: '12px' }}>
+                        <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                          + Agregar rápidamente un tono:
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {PRESET_COLORS.map((preset, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleAddVariant(preset)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#334155',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: preset.hex, border: '1px solid rgba(0,0,0,0.2)', display: 'inline-block' }} />
+                              <span>{preset.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Encabezado de columnas para las variantes */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 1fr 110px 36px',
+                        gap: '8px',
+                        padding: '0 10px',
+                        marginBottom: '6px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        color: '#166534',
+                        textTransform: 'uppercase'
+                      }}>
+                        <span style={{ width: '28px', textAlign: 'center' }}>Tono</span>
+                        <span>Color Disponible (Nombre)</span>
+                        <span style={{ textAlign: 'center' }}>Stock / Cant.</span>
+                        <span></span>
+                      </div>
+
+                      {/* Lista de colores configurados */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {productForm.variants.map((variant, index) => (
+                          <div 
+                            key={variant.id || index}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'auto 1fr 110px 36px',
+                              gap: '8px',
+                              alignItems: 'center',
+                              background: '#ffffff',
+                              padding: '8px 10px',
+                              borderRadius: '10px',
+                              border: '1px solid #cbd5e1'
+                            }}
+                          >
+                            {/* Selector visual de color */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <input
+                                type="color"
+                                value={variant.hex || '#94a3b8'}
+                                onChange={(e) => handleUpdateVariant(index, 'hex', e.target.value)}
+                                style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  padding: 0,
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  background: 'none'
+                                }}
+                                title="Elegir tono visual"
+                              />
+                            </div>
+
+                            {/* Nombre del color */}
+                            <div>
+                              <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Nombre del Color (ej: Beige Arena)"
+                                value={variant.color}
+                                onChange={(e) => handleUpdateVariant(index, 'color', e.target.value)}
+                                style={{ fontSize: '12px', padding: '6px 8px', background: '#f8fafc', color: '#0f172a', fontWeight: 600 }}
+                                required
+                              />
+                            </div>
+
+                            {/* Stock para este color */}
+                            <div>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  placeholder="Stock"
+                                  min="0"
+                                  value={variant.stock}
+                                  onChange={(e) => handleUpdateVariant(index, 'stock', Math.max(0, parseInt(e.target.value) || 0))}
+                                  style={{ fontSize: '12px', padding: '6px 8px', textAlign: 'center', background: '#f8fafc', color: '#0f172a', fontWeight: 700 }}
+                                  required
+                                />
+                                <span style={{ position: 'absolute', right: '6px', top: '7px', fontSize: '9px', color: '#94a3b8', fontWeight: 800 }}>
+                                  uds
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Eliminar Color */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVariant(index)}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                background: '#fee2e2',
+                                border: '1px solid #fecaca',
+                                color: '#ef4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer'
+                              }}
+                              title="Eliminar este color"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Footer con agregar y totalizador */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleAddVariant()}
+                          style={{
+                            background: '#eff6ff',
+                            border: '1px dashed #60a5fa',
+                            color: '#1d4ed8',
+                            borderRadius: '8px',
+                            padding: '6px 12px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          <Plus size={13} />
+                          <span>+ Agregar otro color</span>
+                        </button>
+
+                        <div style={{ fontSize: '11.5px', color: '#166534', fontWeight: 800, background: '#dcfce7', padding: '5px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                          📦 Stock Total por Colores: {getTotalVariantsStock(productForm.variants)} unidades
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Grid para Cantidades */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                      Cantidad / Stock Inicial <span style={{ color: '#ef4444' }}>*</span>
+                      Cantidad / Stock Total <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="number"
                       className="form-input"
                       placeholder="0"
-                      value={productForm.quantity}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
+                      value={productForm.has_variants ? getTotalVariantsStock(productForm.variants) : productForm.quantity}
+                      onChange={(e) => !productForm.has_variants && handleQuantityChange(e.target.value)}
+                      readOnly={productForm.has_variants}
                       required
-                      style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', fontWeight: '700' }}
+                      style={{
+                        background: productForm.has_variants ? '#f0fdf4' : '#ffffff',
+                        borderColor: productForm.has_variants ? '#86efac' : '#cbd5e1',
+                        color: productForm.has_variants ? '#166534' : '#0f172a',
+                        fontWeight: '700'
+                      }}
                     />
+                    {productForm.has_variants && (
+                      <span style={{ fontSize: '10px', color: '#15803d', fontWeight: 700, marginTop: '3px', display: 'block' }}>
+                        ✓ Calculado automáticamente por la suma de colores ({productForm.variants.length} colores)
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group" style={{ marginBottom: 0 }}>

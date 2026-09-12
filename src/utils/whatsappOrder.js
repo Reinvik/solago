@@ -62,6 +62,10 @@ export const formatShowcaseWhatsAppOrder = ({
   basket.forEach((item, index) => {
     const qty = item.cantidad;
     const name = item.part?.name || 'Producto';
+    const variantLabel = (item.selectedVariant?.color || item.variant?.color || item.part?.selectedVariant?.color)
+      ? ` [Color: ${item.selectedVariant?.color || item.variant?.color || item.part?.selectedVariant?.color}]`
+      : '';
+    const fullName = `${name}${variantLabel}`;
     const unit = item.part?.unit ? ` ${item.part.unit}` : '';
     const unitPriceUSD = Number(item.part?.sell_price || 0);
     const itemTotalUSD = unitPriceUSD * qty;
@@ -71,7 +75,7 @@ export const formatShowcaseWhatsAppOrder = ({
     const usdPriceStr = `$${itemTotalUSD.toFixed(2)}`;
     const localPriceStr = `${currencySymbol} ${itemTotalLocal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    message += `${index + 1}. *${qty}${unit}* x ${name} ➔ ${usdPriceStr}`;
+    message += `${index + 1}. *${qty}${unit}* x ${fullName} ➔ ${usdPriceStr}`;
     if (rate > 1 || currencyCode !== 'USD') {
       message += ` (${localPriceStr})`;
     }

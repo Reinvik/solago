@@ -10,8 +10,9 @@ import {
   Search, Plus, Minus, Trash2, CheckCircle, CheckCircle2, Printer, Download, XCircle, ShoppingBag, ShoppingCart, ShoppingBasket,
   CreditCard, DollarSign, QrCode, X, RefreshCw, Sparkles, Grid, LayoutGrid,
   List, Layers, SlidersHorizontal, Barcode, Volume2, VolumeX, Wifi, WifiOff, MessageCircle, Copy, Share2, Utensils, UtensilsCrossed,
-  ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package
+  ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package, Palette
 } from 'lucide-react';
+import { hasProductVariants, getProductVariants, getVariantStock } from '../utils/productSpecs';
 const getProductImage = (prod) => {
   if (prod?.image_url) return prod.image_url;
   const name = (prod?.name || '').toLowerCase();
@@ -109,6 +110,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
   const [tableOrigin, setTableOrigin] = useState(null); // { tableId, participantName }
   const [completedSaleModal, setCompletedSaleModal] = useState(null); // Modal comprobante emitido (boleta/factura)
   const [pendingPosAnnulSale, setPendingPosAnnulSale] = useState(null);
+  const [selectedVariantModalProduct, setSelectedVariantModalProduct] = useState(null); // Modal selector de variante de color
 
   // ─── ESTADOS PARA GESTIÓN DE TURNOS Y CIERRE CIEGO DE CAJA ───
   const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
@@ -479,9 +481,25 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
   // Helper para identificar productos de forma única
   const getProdKey = (p) => p?.id || p?.sku || p?.name;
 
-  // Agregar al carrito (soporta unidades y productos a granel/peso en Kilos/Gramos)
-  const addToCart = (product, weightQtyOverride = null) => {
+  // Helper para identificar ítems del carrito (soporta variantes de color individuales)
+  const getCartItemKey = (item) => {
+    if (!item) return '';
+    const base = item.part?.id || item.part?.sku || item.part?.name || item.id || '';
+    if (item.selectedVariant) {
+      return `${base}__var_${item.selectedVariant.id || item.selectedVariant.color}`;
+    }
+    return String(base);
+  };
+
+  // Agregar al carrito (soporta variantes de color con stock individual, unidades y productos a granel/peso)
+  const addToCart = (product, weightQtyOverride = null, selectedVariant = null) => {
     if (!product) return;
+
+    // Si tiene variantes de color configuradas y no se ha seleccionado una variante, abrir selector
+    if (hasProductVariants(product) && !selectedVariant) {
+      setSelectedVariantModalProduct(product);
+      return;
+    }
 
     const isWeightProduct = product.is_weight_based || product.unit === 'Kg.' || product.unit === 'g';
     let weightQty = weightQtyOverride;
@@ -505,49 +523,85 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
     }
 
     const initialQty = weightQty !== null ? weightQty : 1;
-    const targetKey = getProdKey(product);
-    const existing = cart.find(item => getProdKey(item.part) === targetKey);
     const isService = product.sku?.startsWith('SERV-') || product.stock === 999;
     
+    // Validar stock disponible para la variante específica o producto general
+    const maxStock = selectedVariant
+      ? (Number(selectedVariant.stock) || 0)
+      : (Number(product.stock) || 0);
+
+    if (!isService && maxStock <= 0) {
+      playSound('error');
+      alert(`El color "${selectedVariant?.color || 'seleccionado'}" no tiene stock disponible.`);
+      return;
+    }
+
+    const targetVariantId = selectedVariant ? (selectedVariant.id || selectedVariant.color) : null;
+    const existing = cart.find(item => {
+      const sameBase = getProdKey(item.part) === getProdKey(product);
+      if (!sameBase) return false;
+      if (selectedVariant) {
+        const itemVarId = item.selectedVariant?.id || item.selectedVariant?.color;
+        return itemVarId === targetVariantId;
+      }
+      return !item.selectedVariant;
+    });
+
     if (existing) {
       const newQty = existing.cantidad + initialQty;
-      if (!isService && newQty > product.stock) {
-        alert(`No hay suficiente stock. Límite: ${product.stock} ${product.unit || 'unidades'}.`);
+      if (!isService && newQty > maxStock) {
+        playSound('error');
+        alert(`No hay suficiente stock para "${selectedVariant ? `${product.name} (${selectedVariant.color})` : product.name}". Límite disponible: ${maxStock} unidades.`);
         return;
       }
       setCart(cart.map(item => 
-        getProdKey(item.part) === targetKey 
+        item === existing 
           ? { ...item, cantidad: Number(newQty.toFixed(3)) }
           : item
       ));
     } else {
-      if (!isService && product.stock <= 0) {
-        alert('Este producto no tiene stock disponible.');
-        return;
-      }
-      setCart([...cart, { part: product, cantidad: Number(initialQty.toFixed(3)) }]);
+      setCart([...cart, { 
+        part: product, 
+        cantidad: Number(initialQty.toFixed(3)),
+        selectedVariant: selectedVariant || null
+      }]);
     }
 
     setLastScannedItem(product);
     playSound('scan');
-    // ⬇ NO abrir la canasta automáticamente — el usuario decide cuando verla
+    const targetKey = getProdKey(product);
     setAddedProdId(targetKey);
     setTimeout(() => setAddedProdId(null), 600);
 
     // Mostrar toast flotante de confirmación (desaparece en 2.5 s)
-    setCartToast({ name: product.name });
+    const toastLabel = selectedVariant ? `${product.name} (${selectedVariant.color})` : product.name;
+    setCartToast({ name: toastLabel });
     setTimeout(() => setCartToast(null), 2500);
   };
 
-  // Modificar cantidad del carrito
-  const updateQty = (targetProd, delta) => {
-    const targetKey = typeof targetProd === 'string' ? targetProd : getProdKey(targetProd);
-    const item = cart.find(i => getProdKey(i.part) === targetKey);
-    if (!item) return;
+  // Modificar cantidad del carrito (soporta items específicos con variantes o productos)
+  const updateQty = (target, delta) => {
+    if (!target) return;
 
-    const newQty = item.cantidad + delta;
+    let itemToUpdate = null;
+    if (target.part) {
+      itemToUpdate = target;
+    } else {
+      const targetKey = typeof target === 'string' ? target : getProdKey(target);
+      const matchingItems = cart.filter(i => getProdKey(i.part) === targetKey);
+      if (matchingItems.length === 0) return;
+
+      if (delta > 0 && hasProductVariants(matchingItems[0].part)) {
+        // Si tiene variantes y pulsa +, abrir modal para que escoja qué color agregar
+        setSelectedVariantModalProduct(matchingItems[0].part);
+        return;
+      }
+      itemToUpdate = matchingItems[matchingItems.length - 1];
+    }
+
+    const newQty = itemToUpdate.cantidad + delta;
     if (newQty <= 0) {
-      const newCart = cart.filter(i => getProdKey(i.part) !== targetKey);
+      const newCart = cart.filter(i => i !== itemToUpdate);
       setCart(newCart);
       playSound('delete');
       if (newCart.length === 0) {
@@ -556,21 +610,32 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
       return;
     }
 
-    const isService = item.part.sku?.startsWith('SERV-') || item.part.stock === 999;
-    if (!isService && newQty > item.part.stock) {
+    const part = itemToUpdate.part;
+    const isService = part?.sku?.startsWith('SERV-') || part?.stock === 999;
+    const maxStock = itemToUpdate.selectedVariant
+      ? (Number(itemToUpdate.selectedVariant.stock) || 0)
+      : (Number(part?.stock) || 0);
+
+    if (!isService && newQty > maxStock) {
       playSound('error');
-      alert(`No hay suficiente stock. Límite: ${item.part.stock} unidades.`);
+      alert(`No hay suficiente stock para "${itemToUpdate.selectedVariant ? `${part.name} (${itemToUpdate.selectedVariant.color})` : part?.name}". Límite: ${maxStock} unidades.`);
       return;
     }
 
     playSound('click');
-    setCart(cart.map(i => getProdKey(i.part) === targetKey ? { ...i, cantidad: newQty } : i));
+    setCart(cart.map(i => i === itemToUpdate ? { ...i, cantidad: Number(newQty.toFixed(3)) } : i));
   };
 
-  // Remover del carrito
-  const removeFromCart = (targetProd) => {
-    const targetKey = typeof targetProd === 'string' ? targetProd : getProdKey(targetProd);
-    const newCart = cart.filter(item => getProdKey(item.part) !== targetKey);
+  // Remover del carrito (soporta item específico con variante o producto completo)
+  const removeFromCart = (target) => {
+    if (!target) return;
+    let newCart;
+    if (target.part) {
+      newCart = cart.filter(item => item !== target);
+    } else {
+      const targetKey = typeof target === 'string' ? target : getProdKey(target);
+      newCart = cart.filter(item => getProdKey(item.part) !== targetKey);
+    }
     setCart(newCart);
     playSound('delete');
     if (newCart.length === 0) {
@@ -1713,9 +1778,11 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
               const imageUrl = getProductImage(product);
               const cardKey = product.id ? `pos-card-${product.id}-${idx}` : `pos-card-sku-${product.sku || idx}-${idx}`;
 
-              const cartItem = cart.find(c => getProdKey(c.part) === cardKey || c.part.id === product.id || c.part.name === product.name);
-              const cartQty = cartItem ? cartItem.cantidad : 0;
-              const cartSubtotal = cartQty * product.sell_price;
+              const matchingCartItems = cart.filter(c => getProdKey(c.part) === getProdKey(product));
+              const cartQty = matchingCartItems.reduce((sum, c) => sum + (Number(c.cantidad) || 0), 0);
+              const cartSubtotal = cartQty * (Number(product.sell_price) || 0);
+              const prodVariants = getProductVariants(product);
+              const hasVariants = prodVariants.length > 0;
 
               if (viewDensity === 'list') {
                 return (
@@ -1730,6 +1797,12 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                       <span className="pos-sku-badge">{product.sku || 'S/N'}</span>
                       <span className="pos-product-name" style={{ minHeight: 'unset', marginBottom: 0, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span>{product.name}</span>
+                        {hasVariants && (
+                          <span style={{ fontSize: '9.5px', fontWeight: 800, background: '#ede9fe', color: '#6d28d9', padding: '1px 6px', borderRadius: '4px', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <Palette size={10} />
+                            {prodVariants.length} colores
+                          </span>
+                        )}
                         {(product.is_exempt || product.is_tax_exempt) && (
                           <span style={{ fontSize: '9px', fontWeight: 900, background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
                             (E)
@@ -1943,6 +2016,25 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                         <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
                           Ref: {product.sku}
                         </span>
+                      )}
+                      {hasVariants && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            fontSize: '9.5px',
+                            fontWeight: 800,
+                            background: '#ede9fe',
+                            color: '#6d28d9',
+                            padding: '2px 7px',
+                            borderRadius: '5px',
+                            border: '1px solid #ddd6fe',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <Palette size={11} />
+                            {prodVariants.length} colores disp.
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -2226,7 +2318,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
               marginBottom: '20px'
             }}>
               {cart.map((item, idx) => (
-                <div key={getProdKey(item.part) ? `modal-cart-${getProdKey(item.part)}-${idx}` : `cart-row-${idx}`} style={{
+                <div key={getCartItemKey(item) ? `modal-cart-${getCartItemKey(item)}-${idx}` : `cart-row-${idx}`} style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -2235,24 +2327,55 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                   fontSize: '13px'
                 }}>
                   <div style={{ width: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }} title={item.part.name}>
-                      <span>{item.part.name}</span>
+                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }} title={item.part?.name}>
+                      <span>{item.part?.name}</span>
+                      {item.selectedVariant?.color && (
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          background: 'rgba(99, 102, 241, 0.12)',
+                          color: '#4f46e5',
+                          padding: '1px 7px',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(99, 102, 241, 0.25)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <span style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: item.selectedVariant.hex || '#6366f1',
+                            display: 'inline-block',
+                            border: '1px solid rgba(0,0,0,0.15)'
+                          }} />
+                          {item.selectedVariant.color}
+                        </span>
+                      )}
                       {(item.participantName || item.part?.participantName) && (
                         <span style={{ fontSize: '9.5px', fontWeight: 800, background: 'rgba(6, 182, 212, 0.15)', color: 'var(--color-cyan)', padding: '1px 6px', borderRadius: '4px', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
                           👤 {item.participantName || item.part?.participantName}
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {item.part.sku || 'S/N'}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      SKU: {item.selectedVariant?.sku || item.part?.sku || 'S/N'}
+                      {item.selectedVariant?.stock !== undefined && (
+                        <span style={{ marginLeft: '6px', color: '#64748b' }}>
+                          • Stock color: {item.selectedVariant.stock}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Cantidades */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <button className="pos-cart-item-btn" style={{ width: '22px', height: '22px' }} onClick={() => updateQty(item.part, -1)}>
+                    <button className="pos-cart-item-btn" style={{ width: '22px', height: '22px' }} onClick={() => updateQty(item, -1)}>
                       <Minus size={8} />
                     </button>
                     <span style={{ fontWeight: 750, minWidth: '14px', textAlign: 'center' }}>{item.cantidad}</span>
-                    <button className="pos-cart-item-btn" style={{ width: '22px', height: '22px' }} onClick={() => updateQty(item.part, 1)}>
+                    <button className="pos-cart-item-btn" style={{ width: '22px', height: '22px' }} onClick={() => updateQty(item, 1)}>
                       <Plus size={8} />
                     </button>
                   </div>
@@ -2261,7 +2384,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                     <DualCurrencyDisplay amount={item.cantidad * item.part.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
                   </div>
 
-                  <button className="pos-cart-item-remove" style={{ marginLeft: '10px' }} onClick={() => removeFromCart(item.part)}>
+                  <button className="pos-cart-item-remove" style={{ marginLeft: '10px' }} onClick={() => removeFromCart(item)}>
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -3096,6 +3219,135 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SELECCIÓN DE COLOR / VARIANTE DISPONIBLE EN POS */}
+      {selectedVariantModalProduct && (
+        <div className="modal-overlay" style={{ zIndex: 12000 }}>
+          <div className="modal-content glass-panel cyan-glow" style={{ maxWidth: '520px', width: '95%', padding: '24px' }}>
+            <div className="modal-header" style={{ marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>
+                  <Palette size={22} />
+                </div>
+                <div>
+                  <h3 className="modal-title" style={{ fontSize: '18px', fontWeight: 900, margin: 0 }}>
+                    Seleccionar Color Disponible
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', margin: 0, fontWeight: 600 }}>
+                    {selectedVariantModalProduct.name} {selectedVariantModalProduct.sku ? `• Ref: ${selectedVariantModalProduct.sku}` : ''}
+                  </p>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setSelectedVariantModalProduct(null)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                Colores en Inventario y Cantidad Disponible
+              </span>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-cyan)' }}>
+                Precio: <DualCurrencyDisplay amount={selectedVariantModalProduct.sell_price} fontSize="12px" primaryColor="var(--color-cyan)" showSwap={false} />
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
+              {getProductVariants(selectedVariantModalProduct).map((v) => {
+                const vStock = Number(v.stock || 0);
+                const isOutOfStock = vStock <= 0;
+                const vInCart = cart.find(c => {
+                  const sameBase = getProdKey(c.part) === getProdKey(selectedVariantModalProduct);
+                  const varId = c.selectedVariant?.id || c.selectedVariant?.color;
+                  return sameBase && varId === (v.id || v.color);
+                })?.cantidad || 0;
+                const remaining = Math.max(0, vStock - vInCart);
+
+                return (
+                  <div
+                    key={v.id || v.color}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: isOutOfStock ? '1.5px solid #e2e8f0' : '1.5px solid #cbd5e1',
+                      background: isOutOfStock ? '#f8fafc' : '#ffffff',
+                      opacity: isOutOfStock ? 0.6 : 1,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span
+                        style={{
+                          width: '26px',
+                          height: '26px',
+                          borderRadius: '50%',
+                          backgroundColor: v.hex || '#6366f1',
+                          border: '2px solid #ffffff',
+                          boxShadow: '0 0 0 1px #cbd5e1',
+                          flexShrink: 0
+                        }}
+                      />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                          {v.color}
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: isOutOfStock ? '#ef4444' : '#64748b', fontWeight: 600 }}>
+                          {isOutOfStock ? '● Agotado (0 unids)' : `● ${vStock} unidades disponibles`}
+                          {vInCart > 0 && (
+                            <span style={{ marginLeft: '6px', color: '#2563eb', fontWeight: 700 }}>
+                              ({vInCart} en carrito)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={remaining <= 0}
+                      onClick={() => {
+                        addToCart(selectedVariantModalProduct, null, v);
+                        setSelectedVariantModalProduct(null);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 14px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        borderRadius: '8px',
+                        border: 'none',
+                        cursor: remaining <= 0 ? 'not-allowed' : 'pointer',
+                        background: remaining <= 0 ? '#e2e8f0' : 'linear-gradient(135deg, #06b6d4, #0284c7)',
+                        color: remaining <= 0 ? '#94a3b8' : '#ffffff',
+                        boxShadow: remaining <= 0 ? 'none' : '0 2px 8px rgba(6, 182, 212, 0.3)'
+                      }}
+                    >
+                      <Plus size={14} />
+                      <span>{remaining <= 0 ? (vStock <= 0 ? 'Agotado' : 'Límite alcanzado') : 'Agregar'}</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setSelectedVariantModalProduct(null)}
+                style={{ padding: '8px 18px', fontSize: '13px' }}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

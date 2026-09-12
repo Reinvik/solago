@@ -552,8 +552,13 @@ export default function SalesHistory() {
                   return (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                       <div style={{ maxWidth: '65%' }}>
-                        <div style={{ fontWeight: 650, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ fontWeight: 650, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           <span>{item.nombre || item.name}</span>
+                          {(item.selectedVariant?.color || item.color) && (
+                            <span style={{ fontSize: '9.5px', fontWeight: 800, background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', padding: '1px 6px', borderRadius: '4px', border: '1px solid rgba(99, 102, 241, 0.25)' }}>
+                              🎨 {item.selectedVariant?.color || item.color}
+                            </span>
+                          )}
                           {!selectedSaleTotals.isTaxFreeSale && isExempt && (
                             <span style={{ fontSize: '9.5px', fontWeight: 900, background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
                               (E) Exento

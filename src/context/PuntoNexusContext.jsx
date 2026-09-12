@@ -2,13 +2,39 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { supabase } from '../utils/supabaseClient';
 import { getCountryConfig, COUNTRY_CONFIGS } from '../utils/countryConfig';
 import { saveOfflineSale, getPendingOfflineSales, removePendingOfflineSale, cacheLocalInventory, getCachedLocalInventory } from '../utils/indexedDb';
-import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
+import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants } from '../utils/productSpecs';
 
 const PuntoNexusContext = createContext();
 
 export const usePuntoNexus = () => useContext(PuntoNexusContext);
 
 const DEFAULT_PRODUCTS = [
+  { 
+    id: 'prod-alf-1', 
+    name: 'Alfombra Nórdica Shaggy Soft Touch (160x230 cm)', 
+    sku: 'DECO-ALF-001', 
+    category: 'Hogar y Decoración', 
+    cost_price: 25.0, 
+    sell_price: 45.0, 
+    stock: 10, 
+    min_stock: 2, 
+    image_url: 'https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=600&q=80', 
+    description: JSON.stringify({
+      description: 'Hermosa alfombra nórdica de pelo largo ultra suave, ideal para sala de estar, dormitorio o living. Base antideslizante lavable.',
+      dimensions: '160 x 230 cm / Espesor 35mm',
+      materials: '100% Poliéster Microfibra Soft / Base TPR Antideslizante',
+      owner_notes: 'Recomendamos aspirar a baja potencia. Se puede lavar en ciclo delicado.',
+      images: [
+        'https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1579656381226-5fc0f0100c3b?auto=format&fit=crop&w=600&q=80'
+      ],
+      variants: [
+        { id: 'var-alf-beige', color: 'Beige Cálido', stock: 5, hex: '#e8d8c3', sku: 'ALF-001-BEI' },
+        { id: 'var-alf-gris', color: 'Gris Ceniza', stock: 3, hex: '#9ca3af', sku: 'ALF-001-GRI' },
+        { id: 'var-alf-azul', color: 'Azul Petróleo', stock: 2, hex: '#1e3a8a', sku: 'ALF-001-AZU' }
+      ]
+    })
+  },
   { id: 'prod-1', name: 'Combo Nexus Doble Burger + Papas', sku: 'REST-CMB-001', category: 'Combos', cost_price: 4.5, sell_price: 9.5, stock: 50, min_stock: 10, image_url: '/images/combo_nexus.jpg', description: 'Doble carne 100% res, queso cheddar, tocino crocante + papas fritas medianas + bebida.' },
   { id: 'prod-2', name: 'Burger Smash Gourmet Doble', sku: 'REST-BRG-002', category: 'Hamburguesas', cost_price: 3.2, sell_price: 7.0, stock: 40, min_stock: 8, image_url: '/images/burger_nexus.jpg', description: 'Doble smashed patty 180g, queso americano fundido, cebolla caramelizada y salsa Nexus.' },
   { id: 'prod-3', name: 'Pepito Mixto Gourmet (Carne y Pollo)', sku: 'REST-PEP-003', category: 'Perros y Pepitos', cost_price: 4.0, sell_price: 8.5, stock: 35, min_stock: 5, image_url: '/images/pepito_mixto.jpg', description: 'Pan baguette 30cm, lomo de res, pechuga de pollo, queso de mano, papitas hilos y salsa de ajo.' },
@@ -1462,14 +1488,20 @@ export const PuntoNexusProvider = ({ children }) => {
     const parsedSpecs = parseProductSpecs(prod);
     const allImages = Array.isArray(prod.images) && prod.images.length > 0 ? prod.images : (parsedSpecs.images || []);
     const primaryImg = (allImages[0] || prod.image_url || '').trim();
+    const productVariants = prod.variants !== undefined ? normalizeVariants(prod.variants) : (parsedSpecs.variants || []);
 
     const serializedDesc = serializeProductSpecs({
       description: prod.description || parsedSpecs.description || '',
       dimensions: prod.dimensions !== undefined ? prod.dimensions : parsedSpecs.dimensions,
       materials: prod.materials !== undefined ? prod.materials : parsedSpecs.materials,
       owner_notes: prod.owner_notes !== undefined ? prod.owner_notes : parsedSpecs.owner_notes,
-      images: allImages
+      images: allImages,
+      variants: productVariants
     });
+
+    const finalStock = productVariants.length > 0
+      ? getTotalVariantsStock(productVariants)
+      : (Number(prod.stock) || 0);
 
     const clean = {
       company_id: compId,
@@ -1478,7 +1510,7 @@ export const PuntoNexusProvider = ({ children }) => {
       category: prod.category || prod.categoria || '',
       cost_price: Number(prod.cost_price) || 0,
       sell_price: Number(prod.sell_price) || 0,
-      stock: Number(prod.stock) || 0,
+      stock: finalStock,
       min_stock: minStockVal,
       image_url: primaryImg,
       description: serializedDesc,
@@ -1501,6 +1533,7 @@ export const PuntoNexusProvider = ({ children }) => {
       const isExemptBool = !!item.is_exempt || !!item.is_tax_exempt;
       const specs = parseProductSpecs(item);
       const allImages = specs.images && specs.images.length > 0 ? specs.images : (item.image_url ? [item.image_url] : []);
+      const itemVariants = specs.variants && specs.variants.length > 0 ? specs.variants : normalizeVariants(item.variants);
       return {
         ...item,
         branch_id: bId,
@@ -1512,7 +1545,8 @@ export const PuntoNexusProvider = ({ children }) => {
         dimensions: specs.dimensions,
         materials: specs.materials,
         owner_notes: specs.owner_notes,
-        images: allImages
+        images: allImages,
+        variants: itemVariants
       };
     }).filter(item => {
       if (!item) return false;
@@ -2104,10 +2138,11 @@ export const PuntoNexusProvider = ({ children }) => {
     // Generar código aleatorio de 4 dígitos
     const code = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // Guardar solo id y cantidad
+    // Guardar id, cantidad y variante de color seleccionada si existe
     const itemsPayload = cartItems.map(item => ({
-      id: item.part.id,
-      cantidad: item.cantidad
+      id: item.part?.id || item.part_id || item.id,
+      cantidad: item.cantidad,
+      selectedVariant: item.selectedVariant || null
     }));
 
     if (isMock) {
@@ -2145,7 +2180,7 @@ export const PuntoNexusProvider = ({ children }) => {
       const items = JSON.parse(stored);
       const mapped = items.map(item => {
         const prod = inventory.find(p => p.id === item.id);
-        if (prod) return { part: prod, cantidad: item.cantidad };
+        if (prod) return { part: prod, cantidad: item.cantidad, selectedVariant: item.selectedVariant || null };
         return null;
       }).filter(Boolean);
 
@@ -2169,7 +2204,7 @@ export const PuntoNexusProvider = ({ children }) => {
 
         const mapped = data.items.map(item => {
           const prod = inventory.find(p => p.id === item.id);
-          if (prod) return { part: prod, cantidad: item.cantidad };
+          if (prod) return { part: prod, cantidad: item.cantidad, selectedVariant: item.selectedVariant || null };
           return null;
         }).filter(Boolean);
 
@@ -2932,6 +2967,113 @@ export const PuntoNexusProvider = ({ children }) => {
     return { error: null };
   };
 
+  const applyCartDeductionsToInventory = (currentInventory, itemsInCart) => {
+    return (currentInventory || []).map(prod => {
+      const soldItemsForProd = itemsInCart.filter(c => {
+        const part = c.part || c;
+        return (part.id && part.id === prod.id) ||
+               (part.sku && part.sku === prod.sku) ||
+               (part.name && part.name === prod.name);
+      });
+
+      if (soldItemsForProd.length > 0 && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
+        const specs = parseProductSpecs(prod);
+        let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
+        let totalQtySold = 0;
+
+        soldItemsForProd.forEach(soldItem => {
+          const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
+          totalQtySold += qty;
+          if (soldItem.selectedVariant && currentVariants.length > 0) {
+            const targetVarId = soldItem.selectedVariant.id;
+            const targetVarColor = (soldItem.selectedVariant.color || '').toLowerCase();
+            currentVariants = currentVariants.map(v => {
+              if (v.id === targetVarId || (targetVarColor && v.color?.toLowerCase() === targetVarColor)) {
+                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - qty) };
+              }
+              return v;
+            });
+          }
+        });
+
+        const newStock = currentVariants.length > 0
+          ? getTotalVariantsStock(currentVariants)
+          : Math.max(0, (Number(prod.stock) || 0) - totalQtySold);
+
+        const serializedDesc = serializeProductSpecs({
+          description: specs.description,
+          dimensions: specs.dimensions,
+          materials: specs.materials,
+          owner_notes: specs.owner_notes,
+          images: specs.images,
+          variants: currentVariants
+        });
+
+        return {
+          ...prod,
+          stock: newStock,
+          variants: currentVariants,
+          description: serializedDesc
+        };
+      }
+      return prod;
+    });
+  };
+
+  const applySaleRestorationsToInventory = (currentInventory, itemsToRestore) => {
+    return (currentInventory || []).map(prod => {
+      const soldItemsForProd = (itemsToRestore || []).filter(i => 
+        (i.part_id && i.part_id === prod.id) || 
+        (i.id && i.id === prod.id) || 
+        (i.sku && i.sku === prod.sku) || 
+        (i.nombre && i.nombre === prod.name)
+      );
+
+      if (soldItemsForProd.length > 0 && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
+        const specs = parseProductSpecs(prod);
+        let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
+        let totalQtyRestored = 0;
+
+        soldItemsForProd.forEach(soldItem => {
+          const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
+          totalQtyRestored += qty;
+          const varColor = soldItem.selectedVariant?.color || soldItem.color;
+          const varId = soldItem.selectedVariant?.id;
+          if ((varId || varColor) && currentVariants.length > 0) {
+            const targetColor = (varColor || '').toLowerCase();
+            currentVariants = currentVariants.map(v => {
+              if (v.id === varId || (targetColor && v.color?.toLowerCase() === targetColor)) {
+                return { ...v, stock: (Number(v.stock) || 0) + qty };
+              }
+              return v;
+            });
+          }
+        });
+
+        const newStock = currentVariants.length > 0
+          ? getTotalVariantsStock(currentVariants)
+          : (Number(prod.stock) || 0) + totalQtyRestored;
+
+        const serializedDesc = serializeProductSpecs({
+          description: specs.description,
+          dimensions: specs.dimensions,
+          materials: specs.materials,
+          owner_notes: specs.owner_notes,
+          images: specs.images,
+          variants: currentVariants
+        });
+
+        return {
+          ...prod,
+          stock: newStock,
+          variants: currentVariants,
+          description: serializedDesc
+        };
+      }
+      return prod;
+    });
+  };
+
   const lastProcessedSaleRef = useRef(null);
 
   const processSale = async (cartItems, paymentMethod = 'Tarjeta', docType = 'Boleta', discount = 0, applyTax = true, cashDetails = null, customerDetails = null) => {
@@ -2980,7 +3122,9 @@ export const PuntoNexusProvider = ({ children }) => {
         precio_unitario: price,
         cost_price: cost,
         subtotal: itemSubtotal,
-        is_exempt: isExempt
+        is_exempt: isExempt,
+        selectedVariant: item.selectedVariant || null,
+        color: item.selectedVariant?.color || item.color || null
       };
     });
 
@@ -3036,17 +3180,9 @@ export const PuntoNexusProvider = ({ children }) => {
     if (isMock) {
       newSale.id = generatedSaleId;
       
-      // 1. Descontar stock localmente
-      const updatedInv = inventory.map(prod => {
-        const soldItem = cartItems.find(c => (c.part?.id || c.id) === prod.id);
-        if (soldItem) {
-          const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
-          const newStock = Math.max(0, prod.stock - qty);
-          return { ...prod, stock: newStock };
-        }
-        return prod;
-      });
-
+      // 1. Descontar stock localmente (respetando variantes de color si existen)
+      const updatedInv = applyCartDeductionsToInventory(inventory, cartItems);
+      setInventory(updatedInv);
       persistLocalInventory(updatedInv);
 
       // 2. Agregar venta a historial local de la sucursal activa
@@ -3077,7 +3213,7 @@ export const PuntoNexusProvider = ({ children }) => {
     } else {
       setLoading(true);
       try {
-        // A. Descontar stock en Supabase
+        // A. Descontar stock en Supabase (sincronizando variantes en description)
         for (const item of cartItems) {
           const part = item.part || item;
           const qty = Number(item.cantidad || item.quantity || 1);
@@ -3085,13 +3221,39 @@ export const PuntoNexusProvider = ({ children }) => {
           const isService = part.sku?.startsWith('SERV-') || currentStock === 999;
           if (isService) continue;
 
-          const newStock = Math.max(0, currentStock - qty);
+          const specs = parseProductSpecs(part);
+          let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
+          if (item.selectedVariant && currentVariants.length > 0) {
+            const targetVarId = item.selectedVariant.id;
+            const targetVarColor = (item.selectedVariant.color || '').toLowerCase();
+            currentVariants = currentVariants.map(v => {
+              if (v.id === targetVarId || (targetVarColor && v.color?.toLowerCase() === targetVarColor)) {
+                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - qty) };
+              }
+              return v;
+            });
+          }
+
+          const newStock = currentVariants.length > 0
+            ? getTotalVariantsStock(currentVariants)
+            : Math.max(0, currentStock - qty);
+
+          const serializedDesc = serializeProductSpecs({
+            description: specs.description,
+            dimensions: specs.dimensions,
+            materials: specs.materials,
+            owner_notes: specs.owner_notes,
+            images: specs.images,
+            variants: currentVariants
+          });
+
+          const updateDbPayload = { stock: newStock, description: serializedDesc };
           let updatedInDb = false;
           
           if (part.id && isUUID(part.id)) {
             const { data: resData, error: stockErr } = await supabase
               .from('punto_nexus_inventory')
-              .update({ stock: newStock })
+              .update(updateDbPayload)
               .eq('id', part.id)
               .select();
             
@@ -3107,7 +3269,7 @@ export const PuntoNexusProvider = ({ children }) => {
             
             await supabase
               .from('punto_nexus_inventory')
-              .update({ stock: newStock })
+              .update(updateDbPayload)
               .eq('company_id', companyId)
               .eq('sku', encodedSku);
           }
@@ -3188,19 +3350,7 @@ export const PuntoNexusProvider = ({ children }) => {
         setSales(updatedBranchSales);
         persistLocalSales(updatedBranchSales);
 
-        const updatedInv = inventory.map(prod => {
-          const soldItem = cartItems.find(c => {
-            const part = c.part || c;
-            return (part.id && part.id === prod.id) || 
-                   (part.sku && part.sku === prod.sku) || 
-                   (part.name && part.name === prod.name);
-          });
-          if (soldItem && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
-            const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
-            return { ...prod, stock: Math.max(0, prod.stock - qty) };
-          }
-          return prod;
-        });
+        const updatedInv = applyCartDeductionsToInventory(inventory, cartItems);
         setInventory(updatedInv);
         persistLocalInventory(updatedInv);
 
@@ -3219,17 +3369,7 @@ export const PuntoNexusProvider = ({ children }) => {
         saveOfflineSale(newSale);
         setPendingOfflineCount(prev => prev + 1);
 
-        const updatedInv = inventory.map(prod => {
-          const soldItem = cartItems.find(c => {
-            const part = c.part || c;
-            return (part.id && part.id === prod.id) || (part.sku && part.sku === prod.sku) || (part.name && part.name === prod.name);
-          });
-          if (soldItem && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
-            const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
-            return { ...prod, stock: Math.max(0, prod.stock - qty) };
-          }
-          return prod;
-        });
+        const updatedInv = applyCartDeductionsToInventory(inventory, cartItems);
         setInventory(updatedInv);
         persistLocalInventory(updatedInv);
 
@@ -3268,21 +3408,9 @@ export const PuntoNexusProvider = ({ children }) => {
     const isMock = !isUUID(companyId);
     const userName = cancelledBy || user?.full_name || user?.name || user?.email || 'Administrador';
 
-    // 1. Reabastecer el stock de los productos que componen la venta
+    // 1. Reabastecer el stock de los productos que componen la venta (respetando variantes de color)
     const itemsToRestore = targetSale.items || [];
-    const updatedInv = inventory.map(prod => {
-      const soldItem = itemsToRestore.find(i => 
-        (i.part_id && i.part_id === prod.id) || 
-        (i.id && i.id === prod.id) || 
-        (i.sku && i.sku === prod.sku) || 
-        (i.nombre && i.nombre === prod.name)
-      );
-      if (soldItem && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
-        const qty = Number(soldItem.cantidad || soldItem.quantity || 1);
-        return { ...prod, stock: prod.stock + qty };
-      }
-      return prod;
-    });
+    const updatedInv = applySaleRestorationsToInventory(inventory, itemsToRestore);
 
     const cancelledAt = new Date().toISOString();
     const updatedSale = {
@@ -3315,19 +3443,46 @@ export const PuntoNexusProvider = ({ children }) => {
     } else {
       setLoading(true);
       try {
-        // Restablecer stock en Supabase
+        // Restablecer stock en Supabase (sincronizando variantes en description y stock total)
         for (const item of itemsToRestore) {
           const qty = Number(item.cantidad || item.quantity || 1);
           const prod = inventory.find(p => (item.part_id && item.part_id === p.id) || (item.sku && item.sku === p.sku) || (item.nombre && item.name === p.name));
           if (prod && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
-            const newStock = prod.stock + qty;
+            const specs = parseProductSpecs(prod);
+            let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
+            const varColor = item.selectedVariant?.color || item.color;
+            const varId = item.selectedVariant?.id;
+            if ((varId || varColor) && currentVariants.length > 0) {
+              const targetColor = (varColor || '').toLowerCase();
+              currentVariants = currentVariants.map(v => {
+                if (v.id === varId || (targetColor && v.color?.toLowerCase() === targetColor)) {
+                  return { ...v, stock: (Number(v.stock) || 0) + qty };
+                }
+                return v;
+              });
+            }
+
+            const newStock = currentVariants.length > 0
+              ? getTotalVariantsStock(currentVariants)
+              : prod.stock + qty;
+
+            const serializedDesc = serializeProductSpecs({
+              description: specs.description,
+              dimensions: specs.dimensions,
+              materials: specs.materials,
+              owner_notes: specs.owner_notes,
+              images: specs.images,
+              variants: currentVariants
+            });
+
+            const updateDbPayload = { stock: newStock, description: serializedDesc };
             if (prod.id && isUUID(prod.id)) {
-              await supabase.from('punto_nexus_inventory').update({ stock: newStock }).eq('id', prod.id);
+              await supabase.from('punto_nexus_inventory').update(updateDbPayload).eq('id', prod.id);
             } else if (prod.sku) {
               const bId = prod.branch_id || activeBranchId || 'branch-matriz';
               const cleanSku = cleanSkuDisplay(prod.sku || '');
               const encodedSku = bId && bId !== 'branch-matriz' ? `${cleanSku}[b:${bId}]`.trim() : cleanSku;
-              await supabase.from('punto_nexus_inventory').update({ stock: newStock }).eq('company_id', companyId).eq('sku', encodedSku);
+              await supabase.from('punto_nexus_inventory').update(updateDbPayload).eq('company_id', companyId).eq('sku', encodedSku);
             }
           }
         }

@@ -43,9 +43,10 @@ import {
   MessageCircle,
   Globe,
   Truck,
-  Store
+  Store,
+  Palette
 } from 'lucide-react';
-import { parseProductSpecs, serializeProductSpecs } from '../utils/productSpecs';
+import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, hasProductVariants, getVariantStock, normalizeVariants } from '../utils/productSpecs';
 import { formatShowcaseWhatsAppOrder, getOrderWhatsAppUrl } from '../utils/whatsappOrder';
 
 export default function Showcase({ isPublicView = false }) {
@@ -127,6 +128,7 @@ export default function Showcase({ isPublicView = false }) {
 
   // ── ESTADOS DE VISTA AMPLIADA / FICHA DE PRODUCTO (MODO MERCADO LIBRE) ──
   const [selectedProductDetail, setSelectedProductDetail] = useState(null);
+  const [selectedVariantId, setSelectedVariantId] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [isEditingSpecs, setIsEditingSpecs] = useState(false);
@@ -262,12 +264,18 @@ export default function Showcase({ isPublicView = false }) {
     setActiveImageIndex(0);
   };
 
-  // Helper para identificar productos de forma única
+  // Helper para identificar productos y variantes de forma única
   const getProdKey = (p) => p?.id || p?.sku || p?.name;
+  const getBasketItemKey = (part, variant = null) => {
+    const base = getProdKey(part);
+    const vId = variant?.id || (variant?.color ? `col_${variant.color}` : '');
+    return vId ? `${base}__var_${vId}` : base;
+  };
 
   // Control de stock e inventario en Tienda Online / Vitrina
   const isUnlimitedStock = (prod) => {
     if (!prod) return false;
+    if (hasProductVariants(prod)) return false; // si tiene variantes, el stock se rige por cada variante
     if (prod.sku?.startsWith('SERV-') || prod.stock === 999) return true;
     if (isFoodBusiness && (prod.stock === undefined || prod.stock === null || prod.stock === '')) return true;
     return false;
@@ -276,6 +284,10 @@ export default function Showcase({ isPublicView = false }) {
   const getProductStock = (prod) => {
     if (!prod) return 0;
     if (isUnlimitedStock(prod)) return Infinity;
+    const vars = getProductVariants(prod);
+    if (vars.length > 0) {
+      return getTotalVariantsStock(vars);
+    }
     return Math.max(0, Number(prod.stock || 0));
   };
 
@@ -285,18 +297,32 @@ export default function Showcase({ isPublicView = false }) {
     const prodImages = (specs.images && specs.images.length > 0)
       ? specs.images
       : (prod.image_url ? [prod.image_url] : []);
+    const prodVariants = specs.variants && specs.variants.length > 0
+      ? specs.variants
+      : getProductVariants(prod);
+
     setSpecsForm({
       dimensions: specs.dimensions || '',
       materials: specs.materials || '',
       description: specs.description || '',
       owner_notes: specs.owner_notes || '',
-      images: prodImages
+      images: prodImages,
+      variants: prodVariants
     });
     setActiveImageIndex(0);
 
+    let activeVar = null;
+    if (prodVariants.length > 0) {
+      activeVar = prodVariants.find(v => Number(v.stock) > 0) || prodVariants[0];
+      setSelectedVariantId(activeVar?.id || null);
+    } else {
+      setSelectedVariantId(null);
+    }
+
     const isUnlim = isUnlimitedStock(prod);
-    const maxStock = getProductStock(prod);
-    const inCartQty = basket.find(i => getProdKey(i.part) === getProdKey(prod))?.cantidad || 0;
+    const maxStock = activeVar ? Number(activeVar.stock || 0) : getProductStock(prod);
+    const targetKey = activeVar ? getBasketItemKey(prod, activeVar) : getProdKey(prod);
+    const inCartQty = basket.find(i => (i.basketKey || getBasketItemKey(i.part, i.selectedVariant)) === targetKey)?.cantidad || 0;
     const canAdd = isUnlim ? 99 : Math.max(0, maxStock - inCartQty);
     setDetailQuantity(canAdd > 0 ? 1 : 0);
 
@@ -321,7 +347,8 @@ export default function Showcase({ isPublicView = false }) {
         dimensions: specsForm.dimensions,
         materials: specsForm.materials,
         owner_notes: specsForm.owner_notes,
-        images: allImgs
+        images: allImgs,
+        variants: specsForm.variants || []
       });
       const updates = {
         description: serialized,
@@ -329,7 +356,8 @@ export default function Showcase({ isPublicView = false }) {
         materials: specsForm.materials,
         owner_notes: specsForm.owner_notes,
         images: allImgs,
-        image_url: primaryPhoto
+        image_url: primaryPhoto,
+        variants: specsForm.variants || []
       };
 
       const res = await updateProduct(selectedProductDetail.id, updates);
@@ -360,23 +388,37 @@ export default function Showcase({ isPublicView = false }) {
       return;
     }
 
-    const maxStock = getProductStock(selectedProductDetail);
+    const specs = parseProductSpecs(selectedProductDetail);
+    const variants = specs.variants && specs.variants.length > 0 ? specs.variants : getProductVariants(selectedProductDetail);
+    const hasVars = variants.length > 0;
+    const selectedVar = hasVars ? (variants.find(v => v.id === selectedVariantId) || variants[0]) : null;
+
+    const maxStock = selectedVar ? Number(selectedVar.stock || 0) : getProductStock(selectedProductDetail);
     const isUnlimited = isUnlimitedStock(selectedProductDetail);
-    const targetKey = getProdKey(selectedProductDetail);
-    const inCart = basket.find(i => getProdKey(i.part) === targetKey);
+    const targetKey = selectedVar ? getBasketItemKey(selectedProductDetail, selectedVar) : getProdKey(selectedProductDetail);
+    const inCart = basket.find(i => (i.basketKey || getBasketItemKey(i.part, i.selectedVariant)) === targetKey);
     const currentInCart = inCart ? inCart.cantidad : 0;
 
     if (!isUnlimited) {
       if (maxStock <= 0) {
-        alert(`"${selectedProductDetail.name}" está agotado en inventario.`);
+        alert(selectedVar 
+          ? `El color "${selectedVar.color}" está agotado en inventario.` 
+          : `"${selectedProductDetail.name}" está agotado en inventario.`
+        );
         return;
       }
       if (currentInCart + detailQuantity > maxStock) {
         const remaining = Math.max(0, maxStock - currentInCart);
         if (remaining <= 0) {
-          alert(`Ya tienes el total disponible (${maxStock} unidades) en tu pedido.`);
+          alert(selectedVar 
+            ? `Ya tienes el total disponible (${maxStock} unidades) del color "${selectedVar.color}" en tu pedido.` 
+            : `Ya tienes el total disponible (${maxStock} unidades) en tu pedido.`
+          );
         } else {
-          alert(`No puedes agregar ${detailQuantity} unidades. Solo quedan ${remaining} disponibles en inventario.`);
+          alert(selectedVar 
+            ? `No puedes agregar ${detailQuantity} unidades. Solo quedan ${remaining} disponibles en color "${selectedVar.color}".` 
+            : `No puedes agregar ${detailQuantity} unidades. Solo quedan ${remaining} disponibles en inventario.`
+          );
         }
         return;
       }
@@ -384,10 +426,17 @@ export default function Showcase({ isPublicView = false }) {
 
     if (inCart) {
       setBasket(basket.map(item =>
-        getProdKey(item.part) === targetKey ? { ...item, cantidad: item.cantidad + detailQuantity } : item
+        (item.basketKey || getBasketItemKey(item.part, item.selectedVariant)) === targetKey 
+          ? { ...item, cantidad: item.cantidad + detailQuantity } 
+          : item
       ));
     } else {
-      setBasket([...basket, { part: selectedProductDetail, cantidad: detailQuantity }]);
+      setBasket([...basket, { 
+        part: selectedProductDetail, 
+        cantidad: detailQuantity,
+        selectedVariant: selectedVar,
+        basketKey: targetKey
+      }]);
     }
     setSelectedProductDetail(null);
   };
@@ -492,6 +541,12 @@ export default function Showcase({ isPublicView = false }) {
   const addToBasket = (product, weightQtyOverride = null) => {
     if (!product) return;
 
+    // Si tiene variantes de color, redirigir a elegir el color en la ficha
+    if (hasProductVariants(product)) {
+      handleOpenProductDetail(product);
+      return;
+    }
+
     const maxStock = getProductStock(product);
     const isUnlimited = isUnlimitedStock(product);
 
@@ -523,7 +578,7 @@ export default function Showcase({ isPublicView = false }) {
 
     const initialQty = weightQty !== null ? weightQty : 1;
     const targetKey = getProdKey(product);
-    const existing = basket.find(item => getProdKey(item.part) === targetKey);
+    const existing = basket.find(item => (item.basketKey || getBasketItemKey(item.part, item.selectedVariant)) === targetKey);
     const currentInBasket = existing ? existing.cantidad : 0;
 
     if (!isUnlimited && (currentInBasket + initialQty > maxStock)) {
@@ -539,32 +594,48 @@ export default function Showcase({ isPublicView = false }) {
     if (existing) {
       const newQty = existing.cantidad + initialQty;
       setBasket(basket.map(item =>
-        getProdKey(item.part) === targetKey ? { ...item, cantidad: Number(newQty.toFixed(3)) } : item
+        (item.basketKey || getBasketItemKey(item.part, item.selectedVariant)) === targetKey ? { ...item, cantidad: Number(newQty.toFixed(3)) } : item
       ));
     } else {
-      setBasket([...basket, { part: product, cantidad: Number(initialQty.toFixed(3)) }]);
+      setBasket([...basket, { part: product, cantidad: Number(initialQty.toFixed(3)), basketKey: targetKey }]);
     }
   };
 
-  const updateBasketQty = (targetProd, delta) => {
-    const targetKey = typeof targetProd === 'string' ? targetProd : getProdKey(targetProd);
-    const item = basket.find(i => getProdKey(i.part) === targetKey);
+  const updateBasketQty = (targetProd, delta, targetVariant = null) => {
+    let targetKey = '';
+    if (typeof targetProd === 'string') {
+      targetKey = targetProd;
+    } else if (targetProd && targetProd.part) {
+      targetKey = targetProd.basketKey || getBasketItemKey(targetProd.part, targetProd.selectedVariant);
+    } else {
+      targetKey = getBasketItemKey(targetProd, targetVariant);
+    }
+
+    const item = basket.find(i => (i.basketKey || getBasketItemKey(i.part, i.selectedVariant)) === targetKey);
     if (!item) return;
 
     if (delta > 0) {
-      const maxStock = getProductStock(item.part);
-      const isUnlimited = isUnlimitedStock(item.part);
-      if (!isUnlimited && item.cantidad + delta > maxStock) {
-        alert(`Stock insuficiente. Solo hay ${maxStock} ${item.part.unit || 'unidades'} disponibles en inventario.`);
-        return;
+      if (item.selectedVariant) {
+        const maxVarStock = Number(item.selectedVariant.stock || 0);
+        if (item.cantidad + delta > maxVarStock) {
+          alert(`Stock insuficiente para el color "${item.selectedVariant.color}". Solo hay ${maxVarStock} unidades disponibles.`);
+          return;
+        }
+      } else {
+        const maxStock = getProductStock(item.part);
+        const isUnlimited = isUnlimitedStock(item.part);
+        if (!isUnlimited && item.cantidad + delta > maxStock) {
+          alert(`Stock insuficiente. Solo hay ${maxStock} ${item.part.unit || 'unidades'} disponibles en inventario.`);
+          return;
+        }
       }
     }
 
     const newQty = item.cantidad + delta;
     if (newQty <= 0) {
-      setBasket(basket.filter(i => getProdKey(i.part) !== targetKey));
+      setBasket(basket.filter(i => (i.basketKey || getBasketItemKey(i.part, i.selectedVariant)) !== targetKey));
     } else {
-      setBasket(basket.map(i => getProdKey(i.part) === targetKey ? { ...i, cantidad: Number(newQty.toFixed(3)) } : i));
+      setBasket(basket.map(i => (i.basketKey || getBasketItemKey(i.part, i.selectedVariant)) === targetKey ? { ...i, cantidad: Number(newQty.toFixed(3)) } : i));
     }
   };
 
@@ -1320,6 +1391,9 @@ export default function Showcase({ isPublicView = false }) {
             ) : (
               filteredProducts.map((prod, idx) => {
                 const inBasket = basket.find(item => getProdKey(item.part) === getProdKey(prod));
+                const hasVars = hasProductVariants(prod);
+                const prodVariants = getProductVariants(prod);
+                const inBasketCount = basket.filter(item => getProdKey(item.part) === getProdKey(prod)).reduce((acc, curr) => acc + (curr.cantidad || 0), 0);
                 const imageUrl = getProductImage(prod);
                 const cardKey = prod.id ? `sc-prod-${prod.id}-${idx}` : `sc-prod-sku-${prod.sku || idx}-${idx}`;
 
@@ -1465,6 +1539,59 @@ export default function Showcase({ isPublicView = false }) {
                           </span>
                         )}
 
+                        {/* Muestra de Colores Disponibles con Stock */}
+                        {hasVars && prodVariants.length > 0 && (
+                          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '11px', color: '#475569', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Palette size={12} style={{ color: companySettings.accent_color || '#0284c7' }} />
+                              <span>Colores disponibles ({prodVariants.length}):</span>
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {prodVariants.map(v => {
+                                const vStock = Number(v.stock || 0);
+                                const isOut = vStock <= 0;
+                                return (
+                                  <span 
+                                    key={v.id} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenProductDetail(prod);
+                                      setSelectedVariantId(v.id);
+                                    }}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      padding: '2px 6px',
+                                      borderRadius: '6px',
+                                      background: isOut ? '#fee2e2' : '#f1f5f9',
+                                      color: isOut ? '#b91c1c' : '#334155',
+                                      border: isOut ? '1px solid #fecaca' : '1px solid #cbd5e1',
+                                      cursor: 'pointer'
+                                    }}
+                                    title={isOut ? `Color ${v.color}: Agotado` : `Color ${v.color}: ${vStock} unidades disponibles`}
+                                  >
+                                    <span 
+                                      style={{
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        background: v.hex || '#94a3b8',
+                                        border: '1px solid rgba(0,0,0,0.15)',
+                                        display: 'inline-block'
+                                      }}
+                                    />
+                                    <span>{v.color}</span>
+                                    <span style={{ fontWeight: 800, opacity: 0.85 }}>({isOut ? 'Agotado' : `${vStock} disp.`})</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Snippet de descripción y enlace directo */}
                         {(() => {
                           const specs = parseProductSpecs(prod);
@@ -1522,6 +1649,61 @@ export default function Showcase({ isPublicView = false }) {
                           const isUnlim = isUnlimitedStock(prod);
                           const prodStock = getProductStock(prod);
                           const isOutOfStock = !isUnlim && prodStock <= 0;
+
+                          if (isOutOfStock) {
+                            return (
+                              <button
+                                type="button"
+                                disabled
+                                style={{
+                                  padding: '7px 14px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  borderRadius: '8px',
+                                  background: '#f1f5f9',
+                                  color: '#94a3b8',
+                                  border: '1px solid #e2e8f0',
+                                  cursor: 'not-allowed'
+                                }}
+                              >
+                                AGOTADO
+                              </button>
+                            );
+                          }
+
+                          // Si tiene variantes de color, abrimos la ficha para elegir el color
+                          if (hasVars) {
+                            return (
+                              <button 
+                                type="button"
+                                onClick={() => handleOpenProductDetail(prod)}
+                                style={{
+                                  padding: '7px 12px',
+                                  fontSize: '11.5px',
+                                  fontWeight: 800,
+                                  borderRadius: '8px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  background: inBasketCount > 0 
+                                    ? '#eff6ff' 
+                                    : companySettings.button_color 
+                                      ? `linear-gradient(135deg, ${companySettings.button_color} 0%, ${companySettings.button_color}ee 100%)` 
+                                      : 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+                                  color: inBasketCount > 0 ? '#1d4ed8' : '#ffffff',
+                                  border: inBasketCount > 0 ? '1.5px solid #bfdbfe' : 'none',
+                                  cursor: 'pointer',
+                                  boxShadow: inBasketCount > 0 ? 'none' : `0 4px 12px ${companySettings.button_color || '#06b6d4'}35`,
+                                  transition: 'all 0.2s ease'
+                                }}
+                                title="Elige tu color preferido"
+                              >
+                                <Palette size={13} />
+                                <span>{inBasketCount > 0 ? `${inBasketCount} en pedido` : 'Elegir Color'}</span>
+                              </button>
+                            );
+                          }
+
                           const isAtMax = !isUnlim && inBasket && inBasket.cantidad >= prodStock;
 
                           if (inBasket) {
@@ -1554,27 +1736,6 @@ export default function Showcase({ isPublicView = false }) {
                                   <Plus size={14} />
                                 </button>
                               </div>
-                            );
-                          }
-
-                          if (isOutOfStock) {
-                            return (
-                              <button
-                                type="button"
-                                disabled
-                                style={{
-                                  padding: '7px 14px',
-                                  fontSize: '11px',
-                                  fontWeight: 800,
-                                  borderRadius: '8px',
-                                  background: '#f1f5f9',
-                                  color: '#94a3b8',
-                                  border: '1px solid #e2e8f0',
-                                  cursor: 'not-allowed'
-                                }}
-                              >
-                                AGOTADO
-                              </button>
                             );
                           }
 
@@ -1936,111 +2097,125 @@ export default function Showcase({ isPublicView = false }) {
                     Tu carrito está vacío.
                   </div>
                 ) : (
-                  basket.map((item, idx) => (
-                    <div key={item.part?.id || item.part?.sku || `basket-item-${idx}`} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.part.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <DualCurrencyDisplay amount={item.part.sell_price} fontSize="11px" primaryColor="var(--text-muted)" showSwap={false} /> c/u
-                          {!isUnlimitedStock(item.part) && (
-                            <span style={{ fontSize: '10px', color: item.cantidad >= getProductStock(item.part) ? '#ef4444' : '#64748b', fontWeight: item.cantidad >= getProductStock(item.part) ? 800 : 500 }}>
-                              • Disp: {getProductStock(item.part)}
-                            </span>
+                  basket.map((item, idx) => {
+                    const itemKey = item.basketKey || getBasketItemKey(item.part, item.selectedVariant) || `basket-item-${idx}`;
+                    const isUnlim = isUnlimitedStock(item.part);
+                    const maxStock = item.selectedVariant ? Number(item.selectedVariant.stock || 0) : getProductStock(item.part);
+                    const isAtMax = !isUnlim && item.cantidad >= maxStock;
+
+                    return (
+                      <div key={itemKey} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.part.name}</div>
+                          
+                          {/* Badge de Variante de Color Seleccionado */}
+                          {item.selectedVariant && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '3px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '1px 6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.selectedVariant.hex || '#64748b', border: '1px solid rgba(0,0,0,0.15)', display: 'inline-block' }} />
+                              <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#1e40af' }}>
+                                Color: {item.selectedVariant.color}
+                              </span>
+                            </div>
                           )}
+
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                            <DualCurrencyDisplay amount={item.part.sell_price} fontSize="11px" primaryColor="var(--text-muted)" showSwap={false} /> c/u
+                            {!isUnlim && (
+                              <span style={{ fontSize: '10px', color: isAtMax ? '#ef4444' : '#64748b', fontWeight: isAtMax ? 800 : 500 }}>
+                                • {item.selectedVariant ? `Disp color: ${maxStock}` : `Disp: ${maxStock}`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Controles de Cantidad y Eliminar */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => updateBasketQty(item, -1)}
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              color: '#475569',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                            title="Restar 1"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          
+                          <span style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', minWidth: '20px', textAlign: 'center' }}>
+                            {item.cantidad}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isAtMax) {
+                                alert(item.selectedVariant 
+                                  ? `Stock máximo alcanzado: solo hay ${maxStock} unidades disponibles en color "${item.selectedVariant.color}".`
+                                  : `Stock máximo alcanzado: solo hay ${maxStock} unidades disponibles en inventario.`
+                                );
+                                return;
+                              }
+                              updateBasketQty(item, 1);
+                            }}
+                            disabled={isAtMax}
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              color: isAtMax ? '#94a3b8' : '#475569',
+                              opacity: isAtMax ? 0.35 : 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: isAtMax ? 'not-allowed' : 'pointer',
+                              padding: 0
+                            }}
+                            title={isAtMax ? `Stock máximo (${maxStock})` : 'Sumar 1'}
+                          >
+                            <Plus size={12} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => updateBasketQty(item, -item.cantidad)}
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              border: '1px solid #fecaca',
+                              background: '#fef2f2',
+                              color: '#ef4444',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0,
+                              marginLeft: '2px'
+                            }}
+                            title="Eliminar del pedido"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+
+                        <div style={{ minWidth: '65px', textAlign: 'right' }}>
+                          <DualCurrencyDisplay amount={item.cantidad * item.part.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
                         </div>
                       </div>
-
-                      {/* Controles de Cantidad y Eliminar */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button
-                          type="button"
-                          onClick={() => updateBasketQty(item.part, -1)}
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#ffffff',
-                            color: '#475569',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            padding: 0
-                          }}
-                          title="Restar 1"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        
-                        <span style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', minWidth: '20px', textAlign: 'center' }}>
-                          {item.cantidad}
-                        </span>
-
-                        {(() => {
-                          const isUnlim = isUnlimitedStock(item.part);
-                          const maxStock = getProductStock(item.part);
-                          const isAtMax = !isUnlim && item.cantidad >= maxStock;
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isAtMax) {
-                                  alert(`Stock máximo alcanzado: solo hay ${maxStock} unidades disponibles en inventario.`);
-                                  return;
-                                }
-                                updateBasketQty(item.part, 1);
-                              }}
-                              disabled={isAtMax}
-                              style={{
-                                width: '24px',
-                                height: '24px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#ffffff',
-                                color: isAtMax ? '#94a3b8' : '#475569',
-                                opacity: isAtMax ? 0.35 : 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: isAtMax ? 'not-allowed' : 'pointer',
-                                padding: 0
-                              }}
-                              title={isAtMax ? `Stock máximo (${maxStock})` : 'Sumar 1'}
-                            >
-                              <Plus size={12} />
-                            </button>
-                          );
-                        })()}
-
-                        <button
-                          type="button"
-                          onClick={() => updateBasketQty(item.part, -item.cantidad)}
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '6px',
-                            border: '1px solid #fecaca',
-                            background: '#fef2f2',
-                            color: '#ef4444',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            padding: 0,
-                            marginLeft: '2px'
-                          }}
-                          title="Eliminar plato"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-
-                      <div style={{ minWidth: '65px', textAlign: 'right' }}>
-                        <DualCurrencyDisplay amount={item.cantidad * item.part.sell_price} fontSize="13px" primaryColor="var(--color-cyan)" align="right" showSwap={false} />
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -2355,9 +2530,23 @@ export default function Showcase({ isPublicView = false }) {
       {/* 🔍 MODAL VISTA AMPLIADA Y FICHA DE PRODUCTO (ESTILO MERCADO LIBRE) 🔍 */}
       {/* ========================================================================= */}
       {selectedProductDetail && (() => {
-        const modalStock = getProductStock(selectedProductDetail);
-        const modalIsUnlimited = isUnlimitedStock(selectedProductDetail);
-        const modalInBasket = basket.find(item => getProdKey(item.part) === getProdKey(selectedProductDetail))?.cantidad || 0;
+        const modalSpecs = parseProductSpecs(selectedProductDetail);
+        const modalVariants = modalSpecs.variants && modalSpecs.variants.length > 0
+          ? modalSpecs.variants
+          : getProductVariants(selectedProductDetail);
+        const hasModalVars = modalVariants.length > 0;
+        const activeVariant = hasModalVars
+          ? (modalVariants.find(v => v.id === selectedVariantId) || modalVariants[0])
+          : null;
+
+        const modalStock = activeVariant
+          ? Number(activeVariant.stock || 0)
+          : getProductStock(selectedProductDetail);
+        const modalIsUnlimited = activeVariant ? false : isUnlimitedStock(selectedProductDetail);
+        const targetBasketKey = activeVariant
+          ? getBasketItemKey(selectedProductDetail, activeVariant)
+          : getProdKey(selectedProductDetail);
+        const modalInBasket = basket.find(item => (item.basketKey || getBasketItemKey(item.part, item.selectedVariant)) === targetBasketKey)?.cantidad || 0;
         const modalAvailableToAdd = modalIsUnlimited ? Infinity : Math.max(0, modalStock - modalInBasket);
         const modalIsOutOfStock = !modalIsUnlimited && modalStock <= 0;
         const modalIsMaxInBasket = !modalIsUnlimited && !modalIsOutOfStock && modalAvailableToAdd <= 0;
@@ -2815,13 +3004,23 @@ export default function Showcase({ isPublicView = false }) {
                           fontWeight: 700, 
                           color: modalIsOutOfStock ? '#ef4444' : modalIsMaxInBasket ? '#b45309' : '#334155' 
                         }}>
-                          {modalIsUnlimited 
-                            ? 'Disponible' 
-                            : modalIsOutOfStock 
-                              ? 'Agotado (Sin stock en inventario)' 
-                              : modalIsMaxInBasket 
-                                ? `Stock máximo alcanzado (${modalInBasket} en tu pedido)` 
-                                : `Disponible (${modalStock} ${selectedProductDetail.unit || 'unidades'})`}
+                          {hasModalVars ? (
+                            activeVariant ? (
+                              modalIsOutOfStock 
+                                ? `Color "${activeVariant.color}": Agotado` 
+                                : modalIsMaxInBasket 
+                                  ? `Stock máximo en "${activeVariant.color}" (${modalInBasket} en pedido)` 
+                                  : `Color "${activeVariant.color}": ${modalStock} disponibles`
+                            ) : 'Selecciona un color'
+                          ) : (
+                            modalIsUnlimited 
+                              ? 'Disponible' 
+                              : modalIsOutOfStock 
+                                ? 'Agotado (Sin stock en inventario)' 
+                                : modalIsMaxInBasket 
+                                  ? `Stock máximo alcanzado (${modalInBasket} en tu pedido)` 
+                                  : `Disponible (${modalStock} ${selectedProductDetail.unit || 'unidades'})`
+                          )}
                           {!modalIsUnlimited && !modalIsOutOfStock && !modalIsMaxInBasket && modalInBasket > 0 && (
                             <span style={{ color: '#0284c7', marginLeft: '6px', fontWeight: 600 }}>
                               • {modalInBasket} en tu pedido
@@ -2851,7 +3050,7 @@ export default function Showcase({ isPublicView = false }) {
                   </h2>
 
                   {/* Tarjeta de Precio Dual */}
-                  <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <span style={{ fontSize: '10px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
                         Precio de Venta
@@ -2864,6 +3063,108 @@ export default function Showcase({ isPublicView = false }) {
                       />
                     </div>
                   </div>
+
+                  {/* ── 🎨 SELECTOR DE VARIANTES DE COLOR CON STOCK INDEPENDIENTE ── */}
+                  {hasModalVars && modalVariants.length > 0 && (
+                    <div style={{
+                      background: '#f8fafc',
+                      borderRadius: '14px',
+                      border: '1.5px solid #e2e8f0',
+                      padding: '12px 14px',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#334155', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Palette size={14} style={{ color: companySettings.accent_color || '#0284c7' }} />
+                          <span>Colores Disponibles: <strong style={{ color: '#0f172a' }}>{activeVariant?.color || 'Elegir'}</strong></span>
+                        </span>
+                        {activeVariant && (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            background: Number(activeVariant.stock) > 0 ? '#dcfce7' : '#fee2e2',
+                            color: Number(activeVariant.stock) > 0 ? '#166534' : '#b91c1c'
+                          }}>
+                            {Number(activeVariant.stock) > 0 ? `${activeVariant.stock} disponibles` : 'Agotado'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {modalVariants.map(variant => {
+                          const isSelected = activeVariant?.id === variant.id;
+                          const varStock = Number(variant.stock || 0);
+                          const isOutOfStock = varStock <= 0;
+                          const varBasketKey = getBasketItemKey(selectedProductDetail, variant);
+                          const varInCart = basket.find(item => (item.basketKey || getBasketItemKey(item.part, item.selectedVariant)) === varBasketKey)?.cantidad || 0;
+
+                          return (
+                            <button
+                              key={variant.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedVariantId(variant.id);
+                                const available = Math.max(0, varStock - varInCart);
+                                setDetailQuantity(available > 0 ? 1 : 0);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '7px',
+                                padding: '6px 12px',
+                                borderRadius: '10px',
+                                border: isSelected 
+                                  ? `2px solid ${companySettings.accent_color || '#0284c7'}` 
+                                  : '1.5px solid #cbd5e1',
+                                background: isSelected ? '#eff6ff' : '#ffffff',
+                                cursor: 'pointer',
+                                opacity: isOutOfStock ? 0.55 : 1,
+                                boxShadow: isSelected ? '0 2px 8px rgba(2, 132, 199, 0.2)' : 'none',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title={isOutOfStock ? `Color ${variant.color} agotado` : `${variant.color}: ${varStock} disponibles`}
+                            >
+                              <span 
+                                style={{
+                                  width: '14px',
+                                  height: '14px',
+                                  borderRadius: '50%',
+                                  background: variant.hex || '#64748b',
+                                  border: '1.5px solid #ffffff',
+                                  boxShadow: '0 0 0 1px #cbd5e1',
+                                  flexShrink: 0
+                                }}
+                              />
+                              <span style={{ fontSize: '12px', fontWeight: isSelected ? 800 : 600, color: isSelected ? '#1e40af' : '#1e293b' }}>
+                                {variant.color}
+                              </span>
+                              <span style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                color: isOutOfStock ? '#ef4444' : '#64748b'
+                              }}>
+                                ({varStock})
+                              </span>
+                              {varInCart > 0 && (
+                                <span style={{
+                                  fontSize: '9.5px',
+                                  fontWeight: 800,
+                                  background: '#dbeafe',
+                                  color: '#1e40af',
+                                  padding: '1px 5px',
+                                  borderRadius: '4px'
+                                }}>
+                                  {varInCart} en pedido
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* ── SECCIÓN FICHA TÉCNICA (ESTILO MERCADO LIBRE) ── */}
                   {!isEditingSpecs ? (
@@ -3166,10 +3467,12 @@ export default function Showcase({ isPublicView = false }) {
                       <ShoppingBag size={17} />
                       <span>
                         {modalIsOutOfStock 
-                          ? 'PRODUCTO AGOTADO' 
+                          ? (activeVariant ? `COLOR "${activeVariant.color.toUpperCase()}" AGOTADO` : 'PRODUCTO AGOTADO') 
                           : modalIsMaxInBasket 
-                            ? 'LÍMITE MÁXIMO ALCANZADO' 
-                            : `AGREGAR AL PEDIDO (${detailQuantity})`}
+                            ? (activeVariant ? `LÍMITE MÁXIMO EN "${activeVariant.color.toUpperCase()}"` : 'LÍMITE MÁXIMO ALCANZADO') 
+                            : activeVariant
+                              ? `AGREGAR (${activeVariant.color} • ${detailQuantity})`
+                              : `AGREGAR AL PEDIDO (${detailQuantity})`}
                       </span>
                     </button>
                   </div>

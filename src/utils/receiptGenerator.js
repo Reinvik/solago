@@ -298,10 +298,14 @@ export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'S
             const netUnit = (!isExempt && sale?.apply_tax !== false) ? (rawUnit / (1 + taxRate)) : rawUnit;
             const netSub = (!isExempt && sale?.apply_tax !== false) ? (rawSub / (1 + taxRate)) : rawSub;
 
+            const colorLabel = (item.selectedVariant?.color || item.color) ? ` [Color: ${item.selectedVariant?.color || item.color}]` : '';
+            const baseName = item.nombre || item.name || 'Producto';
+            const displayName = isExempt ? `${baseName}${colorLabel} (E)` : `${baseName}${colorLabel}`;
+
             return `
               <tr class="item-row">
                 <td style="padding-right: 4px;">
-                  <div class="text-bold">${isExempt ? `${item.nombre || item.name} (E)` : (item.nombre || item.name)}</div>
+                  <div class="text-bold">${displayName}</div>
                   <div>${item.cantidad} x ${formatAmount(netUnit)}</div>
                 </td>
                 <td class="text-right">${formatAmount(netUnit)}</td>
