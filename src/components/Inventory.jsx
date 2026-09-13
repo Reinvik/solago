@@ -2101,10 +2101,10 @@ export default function Inventory() {
                   </div>
 
                   {productForm.has_variants && (
-                    <div style={{ marginTop: '14px', borderTop: '1px solid #bbf7d0', paddingTop: '12px' }}>
+                    <div style={{ marginTop: '14px', borderTop: '1px solid #bbf7d0', paddingTop: '14px' }}>
                       {/* Paleta rápida de tonos populares */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                      <div style={{ marginBottom: '14px' }}>
+                        <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase', display: 'block', marginBottom: '8px', letterSpacing: '0.04em' }}>
                           + Agregar rápidamente un tono:
                         </span>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -2116,18 +2116,36 @@ export default function Inventory() {
                               style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '5px',
+                                gap: '6px',
                                 background: '#ffffff',
                                 border: '1px solid #cbd5e1',
-                                borderRadius: '6px',
-                                padding: '3px 8px',
+                                borderRadius: '20px',
+                                padding: '4px 10px',
                                 fontSize: '11px',
                                 fontWeight: 600,
                                 color: '#334155',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#94a3b8';
+                                e.currentTarget.style.background = '#f8fafc';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#cbd5e1';
+                                e.currentTarget.style.background = '#ffffff';
                               }}
                             >
-                              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: preset.hex, border: '1px solid rgba(0,0,0,0.2)', display: 'inline-block' }} />
+                              <span style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '50%',
+                                background: preset.hex,
+                                border: preset.hex === '#ffffff' ? '1px solid #cbd5e1' : '1px solid rgba(0,0,0,0.15)',
+                                display: 'inline-block',
+                                flexShrink: 0
+                              }} />
                               <span>{preset.name}</span>
                             </button>
                           ))}
@@ -2137,16 +2155,17 @@ export default function Inventory() {
                       {/* Encabezado de columnas para las variantes */}
                       <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'auto 1fr 110px 36px',
-                        gap: '8px',
-                        padding: '0 10px',
-                        marginBottom: '6px',
+                        gridTemplateColumns: '38px 1fr 120px 36px',
+                        gap: '10px',
+                        padding: '0 12px',
+                        marginBottom: '8px',
                         fontSize: '11px',
                         fontWeight: 800,
                         color: '#166534',
-                        textTransform: 'uppercase'
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em'
                       }}>
-                        <span style={{ width: '28px', textAlign: 'center' }}>Tono</span>
+                        <span style={{ textAlign: 'center' }}>Tono</span>
                         <span>Color Disponible (Nombre)</span>
                         <span style={{ textAlign: 'center' }}>Stock / Cant.</span>
                         <span></span>
@@ -2159,115 +2178,198 @@ export default function Inventory() {
                             key={variant.id || index}
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: 'auto 1fr 110px 36px',
-                              gap: '8px',
+                              gridTemplateColumns: '38px 1fr 120px 36px',
+                              gap: '10px',
                               alignItems: 'center',
                               background: '#ffffff',
-                              padding: '8px 10px',
-                              borderRadius: '10px',
-                              border: '1px solid #cbd5e1'
+                              padding: '8px 12px',
+                              borderRadius: '12px',
+                              border: '1px solid #cbd5e1',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                              boxSizing: 'border-box'
                             }}
                           >
                             {/* Selector visual de color */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <input
-                                type="color"
-                                value={variant.hex || '#94a3b8'}
-                                onChange={(e) => handleUpdateVariant(index, 'hex', e.target.value)}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <label
                                 style={{
-                                  width: '28px',
-                                  height: '28px',
-                                  padding: 0,
-                                  border: 'none',
-                                  borderRadius: '6px',
+                                  position: 'relative',
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '50%',
+                                  backgroundColor: variant.hex || '#94a3b8',
+                                  border: '2px solid #ffffff',
+                                  boxShadow: '0 0 0 1.5px #cbd5e1, 0 2px 4px rgba(0,0,0,0.1)',
                                   cursor: 'pointer',
-                                  background: 'none'
+                                  overflow: 'hidden',
+                                  display: 'block',
+                                  flexShrink: 0,
+                                  transition: 'transform 0.15s ease'
                                 }}
-                                title="Elegir tono visual"
-                              />
+                                title="Hacer clic para cambiar tono"
+                              >
+                                <input
+                                  type="color"
+                                  value={variant.hex || '#94a3b8'}
+                                  onChange={(e) => handleUpdateVariant(index, 'hex', e.target.value)}
+                                  style={{
+                                    position: 'absolute',
+                                    top: '-50%',
+                                    left: '-50%',
+                                    width: '200%',
+                                    height: '200%',
+                                    opacity: 0,
+                                    cursor: 'pointer'
+                                  }}
+                                />
+                              </label>
                             </div>
 
                             {/* Nombre del color */}
-                            <div>
+                            <div style={{ minWidth: 0, width: '100%' }}>
                               <input
                                 type="text"
                                 className="form-input"
                                 placeholder="Nombre del Color (ej: Beige Arena)"
                                 value={variant.color}
                                 onChange={(e) => handleUpdateVariant(index, 'color', e.target.value)}
-                                style={{ fontSize: '12px', padding: '6px 8px', background: '#f8fafc', color: '#0f172a', fontWeight: 600 }}
+                                style={{
+                                  width: '100%',
+                                  boxSizing: 'border-box',
+                                  fontSize: '13px',
+                                  padding: '8px 12px',
+                                  background: '#f8fafc',
+                                  color: '#0f172a',
+                                  fontWeight: 600,
+                                  borderRadius: '8px',
+                                  border: '1px solid #cbd5e1'
+                                }}
                                 required
                               />
                             </div>
 
                             {/* Stock para este color */}
-                            <div>
-                              <div style={{ position: 'relative' }}>
+                            <div style={{ minWidth: 0, width: '100%' }}>
+                              <div style={{ position: 'relative', width: '100%' }}>
                                 <input
                                   type="number"
                                   className="form-input"
-                                  placeholder="Stock"
+                                  placeholder="0"
                                   min="0"
                                   value={variant.stock}
                                   onChange={(e) => handleUpdateVariant(index, 'stock', Math.max(0, parseInt(e.target.value) || 0))}
-                                  style={{ fontSize: '12px', padding: '6px 8px', textAlign: 'center', background: '#f8fafc', color: '#0f172a', fontWeight: 700 }}
+                                  style={{
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    fontSize: '13px',
+                                    padding: '8px 32px 8px 10px',
+                                    textAlign: 'center',
+                                    background: '#f8fafc',
+                                    color: '#0f172a',
+                                    fontWeight: 700,
+                                    borderRadius: '8px',
+                                    border: '1px solid #cbd5e1'
+                                  }}
                                   required
                                 />
-                                <span style={{ position: 'absolute', right: '6px', top: '7px', fontSize: '9px', color: '#94a3b8', fontWeight: 800 }}>
+                                <span style={{
+                                  position: 'absolute',
+                                  right: '8px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  fontSize: '10px',
+                                  color: '#64748b',
+                                  fontWeight: 700,
+                                  pointerEvents: 'none',
+                                  userSelect: 'none'
+                                }}>
                                   uds
                                 </span>
                               </div>
                             </div>
 
                             {/* Eliminar Color */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveVariant(index)}
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '8px',
-                                background: '#fee2e2',
-                                border: '1px solid #fecaca',
-                                color: '#ef4444',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer'
-                              }}
-                              title="Eliminar este color"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveVariant(index)}
+                                style={{
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '8px',
+                                  background: '#fee2e2',
+                                  border: '1px solid #fecaca',
+                                  color: '#ef4444',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#fca5a5';
+                                  e.currentTarget.style.color = '#b91c1c';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#fee2e2';
+                                  e.currentTarget.style.color = '#ef4444';
+                                }}
+                                title="Eliminar este color"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
 
                       {/* Footer con agregar y totalizador */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', flexWrap: 'wrap', gap: '8px' }}>
                         <button
                           type="button"
                           onClick={() => handleAddVariant()}
                           style={{
-                            background: '#eff6ff',
-                            border: '1px dashed #60a5fa',
-                            color: '#1d4ed8',
+                            background: '#ffffff',
+                            border: '1.5px dashed #3b82f6',
+                            color: '#2563eb',
                             borderRadius: '8px',
-                            padding: '6px 12px',
-                            fontSize: '11.5px',
+                            padding: '7px 14px',
+                            fontSize: '12px',
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '5px'
+                            gap: '6px',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#eff6ff';
+                            e.currentTarget.style.borderColor = '#2563eb';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.borderColor = '#3b82f6';
                           }}
                         >
-                          <Plus size={13} />
-                          <span>+ Agregar otro color</span>
+                          <Plus size={14} />
+                          <span>Agregar otro color</span>
                         </button>
 
-                        <div style={{ fontSize: '11.5px', color: '#166534', fontWeight: 800, background: '#dcfce7', padding: '5px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                          📦 Stock Total por Colores: {getTotalVariantsStock(productForm.variants)} unidades
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#15803d',
+                          fontWeight: 800,
+                          background: '#dcfce7',
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #86efac',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>📦 Stock Total por Colores:</span>
+                          <strong style={{ fontSize: '13px', color: '#14532d' }}>{getTotalVariantsStock(productForm.variants)} unidades</strong>
                         </div>
                       </div>
                     </div>
