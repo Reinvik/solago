@@ -4,6 +4,53 @@
  * Almacenadas con retrocompatibilidad en el campo `description`.
  */
 
+/**
+ * Extrae limpiamente el texto descriptivo del producto evitando
+ * que cadenas JSON serializadas (anidadas o corruptas) se muestren al usuario.
+ */
+export function unwrapDescription(rawDesc) {
+  if (rawDesc === null || rawDesc === undefined) return '';
+  let current = typeof rawDesc === 'string' ? rawDesc.trim() : String(rawDesc).trim();
+  if (!current) return '';
+
+  let safetyCounter = 0;
+  while (current.startsWith('{') && safetyCounter < 10) {
+    safetyCounter++;
+    try {
+      const parsed = JSON.parse(current);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.description !== undefined && parsed.description !== null) {
+          current = typeof parsed.description === 'string' ? parsed.description.trim() : String(parsed.description).trim();
+        } else if (parsed.text !== undefined && parsed.text !== null) {
+          current = typeof parsed.text === 'string' ? parsed.text.trim() : String(parsed.text).trim();
+        } else {
+          return '';
+        }
+      } else {
+        break;
+      }
+    } catch (e) {
+      const match = current.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (match && match[1]) {
+        try {
+          current = JSON.parse(`"${match[1]}"`);
+        } catch (_) {
+          current = match[1];
+        }
+      } else {
+        return '';
+      }
+      break;
+    }
+  }
+
+  if (current.startsWith('{') && (current.includes('"dimensions"') || current.includes('"variants"') || current.includes('"materials"'))) {
+    return '';
+  }
+
+  return current;
+}
+
 export function normalizeVariants(rawVariants) {
   if (!Array.isArray(rawVariants)) return [];
   return rawVariants
@@ -51,6 +98,24 @@ export function parseProductSpecs(prod) {
     try {
       const parsed = JSON.parse(baseDesc);
       if (parsed && typeof parsed === 'object') {
+        // Rescatar campos si quedaron anidados dentro de parsed.description por serialización previa
+        if (typeof parsed.description === 'string' && parsed.description.trim().startsWith('{')) {
+          try {
+            const nested = JSON.parse(parsed.description);
+            if (nested && typeof nested === 'object') {
+              if (!parsed.dimensions && nested.dimensions) parsed.dimensions = nested.dimensions;
+              if (!parsed.materials && nested.materials) parsed.materials = nested.materials;
+              if (!parsed.owner_notes && nested.owner_notes) parsed.owner_notes = nested.owner_notes;
+              if ((!parsed.images || parsed.images.length === 0) && Array.isArray(nested.images) && nested.images.length > 0) {
+                parsed.images = nested.images;
+              }
+              if ((!parsed.variants || parsed.variants.length === 0) && Array.isArray(nested.variants) && nested.variants.length > 0) {
+                parsed.variants = nested.variants;
+              }
+            }
+          } catch (_) {}
+        }
+
         const parsedImages = Array.isArray(parsed.images) ? parsed.images : [];
         const finalImages = parsedImages.length > 0 
           ? parsedImages 
@@ -60,7 +125,7 @@ export function parseProductSpecs(prod) {
         const finalVariants = parsedVariants.length > 0 ? parsedVariants : directVariants;
 
         return {
-          description: parsed.description || parsed.text || '',
+          description: unwrapDescription(parsed.description !== undefined ? parsed.description : parsed.text),
           dimensions: parsed.dimensions || dims || '',
           materials: parsed.materials || mats || '',
           owner_notes: parsed.owner_notes || parsed.notes || notes || '',
@@ -69,7 +134,24 @@ export function parseProductSpecs(prod) {
         };
       }
     } catch (e) {
-      // Si falla el parseo JSON, se usa como texto plano
+      // Si falla JSON.parse (ej. string concatenado con base64), extraer descripción limpia con unwrapDescription
+      const descMatch = baseDesc.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      let safeDesc = '';
+      if (descMatch && descMatch[1]) {
+        try {
+          safeDesc = JSON.parse(`"${descMatch[1]}"`);
+        } catch (_) {
+          safeDesc = descMatch[1];
+        }
+      }
+      return {
+        description: unwrapDescription(safeDesc),
+        dimensions: dims || '',
+        materials: mats || '',
+        owner_notes: notes || '',
+        images: Array.from(new Set((directImages.length > 0 ? directImages : fallbackImages).filter(Boolean))),
+        variants: directVariants
+      };
     }
   }
 
@@ -84,7 +166,7 @@ export function parseProductSpecs(prod) {
     const finalVariants = objVariants.length > 0 ? objVariants : directVariants;
 
     return {
-      description: baseDesc.description || baseDesc.text || '',
+      description: unwrapDescription(baseDesc.description !== undefined ? baseDesc.description : baseDesc.text),
       dimensions: baseDesc.dimensions || dims || '',
       materials: baseDesc.materials || mats || '',
       owner_notes: baseDesc.owner_notes || baseDesc.notes || notes || '',
@@ -93,10 +175,10 @@ export function parseProductSpecs(prod) {
     };
   }
 
-  // 4. Retornar con valores por defecto
+  // 4. Retornar texto plano desempaquetado
   const finalImages = directImages.length > 0 ? directImages : fallbackImages;
   return {
-    description: baseDesc || '',
+    description: unwrapDescription(baseDesc),
     dimensions: dims || '',
     materials: mats || '',
     owner_notes: notes || '',
@@ -109,7 +191,7 @@ export function serializeProductSpecs({ description = '', dimensions = '', mater
   const cleanDims = String(dimensions || '').trim();
   const cleanMats = String(materials || '').trim();
   const cleanNotes = String(owner_notes || '').trim();
-  const cleanDesc = String(description || '').trim();
+  const cleanDesc = unwrapDescription(description);
   const cleanImages = Array.isArray(images) ? images.filter(Boolean) : [];
   const cleanVariants = normalizeVariants(variants);
 

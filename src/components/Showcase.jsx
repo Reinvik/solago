@@ -46,7 +46,7 @@ import {
   Store,
   Palette
 } from 'lucide-react';
-import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, hasProductVariants, getVariantStock, normalizeVariants } from '../utils/productSpecs';
+import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, hasProductVariants, getVariantStock, normalizeVariants, unwrapDescription } from '../utils/productSpecs';
 import { formatShowcaseWhatsAppOrder, getOrderWhatsAppUrl } from '../utils/whatsappOrder';
 
 export default function Showcase({ isPublicView = false }) {
@@ -304,7 +304,7 @@ export default function Showcase({ isPublicView = false }) {
     setSpecsForm({
       dimensions: specs.dimensions || '',
       materials: specs.materials || '',
-      description: specs.description || '',
+      description: unwrapDescription(specs.description),
       owner_notes: specs.owner_notes || '',
       images: prodImages,
       variants: prodVariants
@@ -342,8 +342,10 @@ export default function Showcase({ isPublicView = false }) {
         : (selectedProductDetail.image_url ? [selectedProductDetail.image_url] : []);
       const primaryPhoto = allImgs[0] || '';
 
+      const cleanDesc = unwrapDescription(specsForm.description);
+
       const serialized = serializeProductSpecs({
-        description: specsForm.description,
+        description: cleanDesc,
         dimensions: specsForm.dimensions,
         materials: specsForm.materials,
         owner_notes: specsForm.owner_notes,
@@ -351,7 +353,7 @@ export default function Showcase({ isPublicView = false }) {
         variants: specsForm.variants || []
       });
       const updates = {
-        description: serialized,
+        description: cleanDesc,
         dimensions: specsForm.dimensions,
         materials: specsForm.materials,
         owner_notes: specsForm.owner_notes,
@@ -367,7 +369,12 @@ export default function Showcase({ isPublicView = false }) {
         setSaveFeedback('¡Ficha y fotos guardadas con éxito!');
         setSelectedProductDetail(prev => ({
           ...prev,
-          ...updates
+          ...updates,
+          description: cleanDesc
+        }));
+        setSpecsForm(prev => ({
+          ...prev,
+          description: cleanDesc
         }));
         setTimeout(() => {
           setIsEditingSpecs(false);
@@ -3177,7 +3184,14 @@ export default function Showcase({ isPublicView = false }) {
 
                         {isOwner && (
                           <button
-                            onClick={() => { setIsEditingSpecs(true); setSaveFeedback(''); }}
+                            onClick={() => {
+                              setIsEditingSpecs(true);
+                              setSpecsForm(prev => ({
+                                ...prev,
+                                description: unwrapDescription(prev.description)
+                              }));
+                              setSaveFeedback('');
+                            }}
                             style={{
                               background: '#eff6ff',
                               border: '1px solid #bfdbfe',
@@ -3200,14 +3214,14 @@ export default function Showcase({ isPublicView = false }) {
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {/* 📄 Descripción Detallada del Producto */}
-                        {specsForm.description && (
+                        {Boolean(unwrapDescription(specsForm.description)) && (
                           <div style={{ paddingBottom: '10px', borderBottom: (specsForm.dimensions || specsForm.materials || specsForm.owner_notes) ? '1px dashed #e2e8f0' : 'none' }}>
                             <span style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
                               <Info size={13} style={{ color: companySettings.accent_color || '#0284c7' }} />
                               <span>Descripción del Producto</span>
                             </span>
                             <p style={{ fontSize: '13px', color: '#1e293b', margin: 0, lineHeight: '1.55', whiteSpace: 'pre-line' }}>
-                              {specsForm.description}
+                              {unwrapDescription(specsForm.description)}
                             </p>
                           </div>
                         )}
@@ -3257,7 +3271,7 @@ export default function Showcase({ isPublicView = false }) {
                           </div>
                         )}
 
-                        {!specsForm.description && !specsForm.dimensions && !specsForm.materials && !specsForm.owner_notes && (
+                        {!unwrapDescription(specsForm.description) && !specsForm.dimensions && !specsForm.materials && !specsForm.owner_notes && (
                           <div style={{ padding: '8px 0', color: '#64748b', fontSize: '12.5px', fontStyle: 'italic' }}>
                             Producto oficial de alta calidad disponible en {companyName || 'Solago'}.
                           </div>

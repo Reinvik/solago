@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { supabase } from '../utils/supabaseClient';
 import { getCountryConfig, COUNTRY_CONFIGS } from '../utils/countryConfig';
 import { saveOfflineSale, getPendingOfflineSales, removePendingOfflineSale, cacheLocalInventory, getCachedLocalInventory } from '../utils/indexedDb';
-import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants } from '../utils/productSpecs';
+import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants, unwrapDescription } from '../utils/productSpecs';
 
 const PuntoNexusContext = createContext();
 
@@ -1490,8 +1490,15 @@ export const PuntoNexusProvider = ({ children }) => {
     const primaryImg = (allImages[0] || prod.image_url || '').trim();
     const productVariants = prod.variants !== undefined ? normalizeVariants(prod.variants) : (parsedSpecs.variants || []);
 
+    let pureDesc = '';
+    if (prod.description !== undefined && prod.description !== null) {
+      pureDesc = unwrapDescription(prod.description);
+    } else {
+      pureDesc = parsedSpecs.description || '';
+    }
+
     const serializedDesc = serializeProductSpecs({
-      description: prod.description || parsedSpecs.description || '',
+      description: pureDesc,
       dimensions: prod.dimensions !== undefined ? prod.dimensions : parsedSpecs.dimensions,
       materials: prod.materials !== undefined ? prod.materials : parsedSpecs.materials,
       owner_notes: prod.owner_notes !== undefined ? prod.owner_notes : parsedSpecs.owner_notes,
@@ -1542,6 +1549,7 @@ export const PuntoNexusProvider = ({ children }) => {
         is_exempt: isExemptBool,
         is_tax_exempt: isExemptBool,
         image_url: allImages[0] || item.image_url || '',
+        description: specs.description,
         dimensions: specs.dimensions,
         materials: specs.materials,
         owner_notes: specs.owner_notes,
