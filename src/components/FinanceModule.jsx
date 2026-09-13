@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { 
@@ -32,14 +32,14 @@ import { formatShiftWhatsAppMessage, getWhatsAppShareUrl } from '../utils/shiftE
 
 export default function FinanceModule() {
   const { 
-    sales, 
-    allSales,
-    inventory, 
-    companySettings, 
+    sales = [], 
+    allSales = [],
+    inventory = [], 
+    companySettings = {}, 
     formatCurrency, 
-    fixedCosts, 
+    fixedCosts = {}, 
     updateFixedCosts, 
-    expenses, 
+    expenses = [], 
     addExpense, 
     updateExpense, 
     deleteExpense,
@@ -95,51 +95,53 @@ export default function FinanceModule() {
   // CÁLCULOS: PUNTO DE EQUILIBRIO DEL MES SELECCIONADO
   // ---------------------------------------------------------
   const [isEditingFixedCosts, setIsEditingFixedCosts] = useState(false);
-  const [tempFixedCosts, setTempFixedCosts] = useState({ ...fixedCosts });
+  const [tempFixedCosts, setTempFixedCosts] = useState({ ...(fixedCosts || {}) });
   const [isEditingModalFixedCosts, setIsEditingModalFixedCosts] = useState(false);
-  const [modalTempFixedCosts, setModalTempFixedCosts] = useState({ ...fixedCosts });
+  const [modalTempFixedCosts, setModalTempFixedCosts] = useState({ ...(fixedCosts || {}) });
   const [manualMarginPct, setManualMarginPct] = useState(null);
   const [desiredProfitGoal, setDesiredProfitGoal] = useState(0);
 
   useEffect(() => {
     if (!isEditingFixedCosts) {
-      setTempFixedCosts({ ...fixedCosts });
+      setTempFixedCosts({ ...(fixedCosts || {}) });
     }
     if (!isEditingModalFixedCosts) {
-      setModalTempFixedCosts({ ...fixedCosts });
+      setModalTempFixedCosts({ ...(fixedCosts || {}) });
     }
   }, [fixedCosts, isEditingFixedCosts, isEditingModalFixedCosts]);
 
   // Costos Fijos Estructurales Recurrentes (Se repiten de plantilla mes a mes)
   const structuralFixedCosts = useMemo(() => {
+    const fc = fixedCosts || {};
     return (
-      Number(fixedCosts.rent || 0) +
-      Number(fixedCosts.salaries || 0) +
-      Number(fixedCosts.software || 0) +
-      Number(fixedCosts.marketing || 0) +
-      Number(fixedCosts.other || 0)
+      Number(fc.rent || 0) +
+      Number(fc.salaries || 0) +
+      Number(fc.software || 0) +
+      Number(fc.marketing || 0) +
+      Number(fc.other || 0)
     );
   }, [fixedCosts]);
 
   // Servicios Públicos Variables del Mes Seleccionado
   const monthServicesVariableTotal = useMemo(() => {
-    const registeredServices = expenses.reduce((sum, exp) => {
-      const expDate = new Date(exp.date || Date.now());
+    const registeredServices = (expenses || []).reduce((sum, exp) => {
+      const expDate = new Date(exp?.date || Date.now());
       if (expDate.getMonth() === selectedMonth && expDate.getFullYear() === selectedYear) {
-        const cat = String(exp.category || '').toLowerCase();
-        const desc = String(exp.description || '').toLowerCase();
+        const cat = String(exp?.category || '').toLowerCase();
+        const desc = String(exp?.description || '').toLowerCase();
         if (cat.includes('servicio') || desc.includes('luz') || desc.includes('agua') || desc.includes('gas') || desc.includes('internet')) {
-          return sum + Number(exp.amount || 0);
+          return sum + Number(exp?.amount || 0);
         }
       }
       return sum;
     }, 0);
 
-    if (registeredServices === 0 && fixedCosts.services > 0) {
-      return Number(fixedCosts.services || 0);
+    const fcServices = Number(fixedCosts?.services || 0);
+    if (registeredServices === 0 && fcServices > 0) {
+      return fcServices;
     }
     return registeredServices;
-  }, [expenses, selectedMonth, selectedYear, fixedCosts.services]);
+  }, [expenses, selectedMonth, selectedYear, fixedCosts?.services]);
 
   // Total Egresos Fijos Base + Servicios del Mes Seleccionado
   const totalFixedCosts = useMemo(() => {
@@ -356,22 +358,23 @@ export default function FinanceModule() {
 
   // Desglose de Egresos para Modal de Egresos
   const expensesBreakdown = useMemo(() => {
+    const fc = fixedCosts || {};
     const fijos = [
-      { name: 'Arriendo / Alquiler', amount: Number(fixedCosts.rent || 0) },
-      { name: 'Sueldos y Nómina Fija', amount: Number(fixedCosts.salaries || 0) },
-      { name: 'Servicios Públicos', amount: Number(fixedCosts.services || 0) },
-      { name: 'Software & POS', amount: Number(fixedCosts.software || 0) },
-      { name: 'Publicidad Fija', amount: Number(fixedCosts.marketing || 0) },
-      { name: 'Otros Costos Fijos', amount: Number(fixedCosts.other || 0) }
+      { name: 'Arriendo / Alquiler', amount: Number(fc.rent || 0) },
+      { name: 'Sueldos y Nómina Fija', amount: Number(fc.salaries || 0) },
+      { name: 'Servicios Públicos', amount: Number(fc.services || 0) },
+      { name: 'Software & POS', amount: Number(fc.software || 0) },
+      { name: 'Publicidad Fija', amount: Number(fc.marketing || 0) },
+      { name: 'Otros Costos Fijos', amount: Number(fc.other || 0) }
     ].filter(item => item.amount > 0);
 
-    const variables = expenses.filter(exp => {
-      const d = new Date(exp.date || Date.now());
+    const variables = (expenses || []).filter(exp => {
+      const d = new Date(exp?.date || Date.now());
       return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
     });
 
     const sueldosList = variables.filter(exp => 
-      exp.category === 'Sueldos y Salarios' || exp.description?.toLowerCase().includes('sueldo') || exp.description?.toLowerCase().includes('nomina')
+      exp?.category === 'Sueldos y Salarios' || exp?.description?.toLowerCase().includes('sueldo') || exp?.description?.toLowerCase().includes('nomina')
     );
 
     return {
@@ -394,23 +397,23 @@ export default function FinanceModule() {
       const yNum = d.getFullYear();
 
       // Ventas del mes i (excluyendo ventas anuladas)
-      const mSales = sales.filter(s => {
-        if (s.status === 'Anulada' || s.cancelled) return false;
-        const sd = new Date(s.sold_at || s.created_at || Date.now());
+      const mSales = (sales || []).filter(s => {
+        if (s?.status === 'Anulada' || s?.cancelled) return false;
+        const sd = new Date(s?.sold_at || s?.created_at || Date.now());
         return sd.getMonth() === mIdx && sd.getFullYear() === yNum;
       });
-      const mSalesTotal = mSales.reduce((sum, s) => sum + Number(s.total_sell || 0), 0);
+      const mSalesTotal = mSales.reduce((sum, s) => sum + Number(s?.total_sell || 0), 0);
 
       // Egresos del mes i
-      const mExp = expenses.filter(e => {
-        const ed = new Date(e.date || Date.now());
+      const mExp = (expenses || []).filter(e => {
+        const ed = new Date(e?.date || Date.now());
         return ed.getMonth() === mIdx && ed.getFullYear() === yNum;
       });
-      const mExpTotal = mExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const mExpTotal = mExp.reduce((sum, e) => sum + Number(e?.amount || 0), 0);
 
       const mBe = breakEvenAmount;
       const mCoverage = mBe > 0 ? Math.round((mSalesTotal / mBe) * 100) : 0;
-      const mCogs = mSales.reduce((sum, s) => sum + Number(s.total_cost || 0), 0);
+      const mCogs = mSales.reduce((sum, s) => sum + Number(s?.total_cost || 0), 0);
       const mNet = mSalesTotal - mCogs - totalFixedCosts;
 
       list.push({

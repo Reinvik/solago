@@ -12,6 +12,7 @@ import UserProfileModal from './components/UserProfileModal';
 import TablesModule from './components/TablesModule';
 import FinanceModule from './components/FinanceModule';
 import BranchesControl from './components/BranchesControl';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function AppContent() {
@@ -723,16 +724,18 @@ function AppContent() {
         )}
 
         {/* Cuerpo / Vistas */}
-        {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
-        {activeTab === 'pos' && <POS setActiveTab={setActiveTab} initialCart={posCartPreload} clearInitialCart={() => setPosCartPreload(null)} />}
-        {activeTab === 'tables' && <TablesModule setActiveTab={setActiveTab} setPosCart={(cart) => setPosCartPreload(cart)} />}
-        {activeTab === 'inventory' && <Inventory />}
-        {activeTab === 'finances' && <FinanceModule />}
-        {activeTab === 'branches' && <BranchesControl setActiveTab={setActiveTab} />}
-        {activeTab === 'history' && <Dashboard setActiveTab={setActiveTab} initialSubTab="history" />}
-        {activeTab === 'showcase' && <Showcase />}
-        {activeTab === 'owner' && <NexusOwner />}
-        {activeTab === 'settings' && <Settings onOpenProfileModal={() => setIsProfileModalOpen(true)} />}
+        <ErrorBoundary key={activeTab} onGoHome={() => setActiveTab('dashboard')}>
+          {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
+          {activeTab === 'pos' && <POS setActiveTab={setActiveTab} initialCart={posCartPreload} clearInitialCart={() => setPosCartPreload(null)} />}
+          {activeTab === 'tables' && <TablesModule setActiveTab={setActiveTab} setPosCart={(cart) => setPosCartPreload(cart)} />}
+          {activeTab === 'inventory' && <Inventory />}
+          {activeTab === 'finances' && <FinanceModule />}
+          {activeTab === 'branches' && <BranchesControl setActiveTab={setActiveTab} />}
+          {activeTab === 'history' && <Dashboard setActiveTab={setActiveTab} initialSubTab="history" />}
+          {activeTab === 'showcase' && <Showcase />}
+          {activeTab === 'owner' && <NexusOwner />}
+          {activeTab === 'settings' && <Settings onOpenProfileModal={() => setIsProfileModalOpen(true)} />}
+        </ErrorBoundary>
 
       </main>
 
