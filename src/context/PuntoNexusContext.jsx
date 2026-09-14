@@ -347,6 +347,7 @@ export const PuntoNexusProvider = ({ children }) => {
       for (const sale of pendingSales) {
         try {
           const payloadToInsert = {
+            id: (sale.id && isUUID(sale.id)) ? sale.id : generateUUID(),
             company_id: sale.company_id || companyId,
             items: sale.items || [],
             total_cost: Number(sale.total_cost || 0),
@@ -356,7 +357,12 @@ export const PuntoNexusProvider = ({ children }) => {
             payment_method: sale.payment_method || 'Efectivo',
             document_type: sale.document_type || 'Boleta',
             exchange_rate: Number(sale.exchange_rate || 1.0),
-            sold_at: sale.sold_at || new Date().toISOString()
+            sold_at: sale.sold_at || new Date().toISOString(),
+            status: sale.status || 'Completada',
+            cancelled: !!sale.cancelled,
+            cancelled_at: sale.cancelled_at || null,
+            cancelled_by: sale.cancelled_by || null,
+            cancellation_reason: sale.cancellation_reason || null
           };
 
           const { error: insertErr } = await supabase
@@ -1582,36 +1588,57 @@ export const PuntoNexusProvider = ({ children }) => {
   };
 
   const mergeBranchSales = (dbList, localList, currentBranchId) => {
-    const map = new Map();
+    const list = [];
+
+    const getMatchIndex = (item) => {
+      return list.findIndex(existing => {
+        if (item.id && existing.id && String(item.id) === String(existing.id)) return true;
+        if (item.sold_at && existing.sold_at && String(item.sold_at) === String(existing.sold_at)) return true;
+        return false;
+      });
+    };
 
     // 1. Cargar primero las ventas de la caché local de esta sucursal específica
     (localList || []).forEach(s => {
       if (!s) return;
       const bId = extractSaleBranchId(s, currentBranchId);
       if (bId === currentBranchId) {
-        const key = String(s.id || s.sold_at);
-        map.set(key, { ...s, branch_id: bId });
+        const idx = getMatchIndex(s);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...s, branch_id: bId };
+        } else {
+          list.push({ ...s, branch_id: bId });
+        }
       }
     });
 
     // 2. Fusionar ventas de la Base de Datos que pertenecen a esta sucursal específica
     (dbList || []).forEach(s => {
       if (!s) return;
-      const key = String(s.id || s.sold_at);
-      const localMatch = map.get(key);
       const dbBranchId = s.branch_id || extractSaleBranchId(s, null);
+      const idx = getMatchIndex(s);
+      const localMatch = idx >= 0 ? list[idx] : null;
       const bId = dbBranchId || (localMatch ? localMatch.branch_id : currentBranchId);
 
       if (bId === currentBranchId) {
-        map.set(key, {
+        const isAnulada = (localMatch && (localMatch.status === 'Anulada' || localMatch.cancelled)) || s.status === 'Anulada' || s.cancelled;
+        const mergedObj = {
           ...s,
           ...localMatch,
-          branch_id: bId
-        });
+          branch_id: bId,
+          status: isAnulada ? 'Anulada' : (s.status || localMatch?.status || 'Completada'),
+          cancelled: !!isAnulada
+        };
+
+        if (idx >= 0) {
+          list[idx] = mergedObj;
+        } else {
+          list.push(mergedObj);
+        }
       }
     });
 
-    return Array.from(map.values()).sort((a, b) => new Date(b.sold_at || 0) - new Date(a.sold_at || 0));
+    return list.sort((a, b) => new Date(b.sold_at || 0) - new Date(a.sold_at || 0));
   };
 
   // Carga de datos al tener compañía o sucursal activa
@@ -3033,8 +3060,8 @@ export const PuntoNexusProvider = ({ children }) => {
       const soldItemsForProd = (itemsToRestore || []).filter(i => 
         (i.part_id && i.part_id === prod.id) || 
         (i.id && i.id === prod.id) || 
-        (i.sku && i.sku === prod.sku) || 
-        (i.nombre && i.nombre === prod.name)
+        (i.sku && (i.sku === prod.sku || cleanSkuDisplay(i.sku) === cleanSkuDisplay(prod.sku))) || 
+        ((i.nombre || i.name) && (i.nombre || i.name) === (prod.name || prod.nombre))
       );
 
       if (soldItemsForProd.length > 0 && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
@@ -3291,6 +3318,7 @@ export const PuntoNexusProvider = ({ children }) => {
             : paymentMethod;
 
           const dbSalePayload = {
+            id: generatedSaleId,
             company_id: companyId,
             items: saleItems,
             total_cost: totalCost,
@@ -3300,7 +3328,9 @@ export const PuntoNexusProvider = ({ children }) => {
             payment_method: formattedPaymentMethod,
             document_type: docType,
             exchange_rate: currentExchangeRate,
-            sold_at: newSale.sold_at
+            sold_at: newSale.sold_at,
+            status: 'Completada',
+            cancelled: false
           };
 
           let { data: dbSaleData, error: saleErr } = await supabase
@@ -3321,6 +3351,7 @@ export const PuntoNexusProvider = ({ children }) => {
         const saleIdStr = dbSale && dbSale.id ? String(dbSale.id) : generatedSaleId;
         const docNumber = referenceNumber ? `REF-${referenceNumber}` : `PN-${saleIdStr.slice(-8).toUpperCase()}`;
         const incomePayload = {
+          id: generateUUID(),
           company_id: companyId,
           tipo: docType,
           categoria: !applyTax ? 'Ventas Sin IVA' : (docType === 'Factura' ? 'Ventas Facturas' : 'Ventas Boleta'),
@@ -3400,7 +3431,8 @@ export const PuntoNexusProvider = ({ children }) => {
     } else if (saleInput) {
       targetSale = sales.find(s => 
         (s.id && String(s.id) === String(saleInput)) || 
-        (s.sale_id && String(s.sale_id) === String(saleInput))
+        (s.sale_id && String(s.sale_id) === String(saleInput)) ||
+        (s.sold_at && String(s.sold_at) === String(saleInput))
       );
     }
 
@@ -3454,7 +3486,12 @@ export const PuntoNexusProvider = ({ children }) => {
         // Restablecer stock en Supabase (sincronizando variantes en description y stock total)
         for (const item of itemsToRestore) {
           const qty = Number(item.cantidad || item.quantity || 1);
-          const prod = inventory.find(p => (item.part_id && item.part_id === p.id) || (item.sku && item.sku === p.sku) || (item.nombre && item.name === p.name));
+          const prod = inventory.find(p => 
+            (item.part_id && item.part_id === p.id) || 
+            (item.id && item.id === p.id) ||
+            (item.sku && (item.sku === p.sku || cleanSkuDisplay(item.sku) === cleanSkuDisplay(p.sku))) || 
+            ((item.nombre || item.name) && (item.nombre || item.name) === (p.name || p.nombre))
+          );
           if (prod && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
             const specs = parseProductSpecs(prod);
             let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
@@ -3472,7 +3509,7 @@ export const PuntoNexusProvider = ({ children }) => {
 
             const newStock = currentVariants.length > 0
               ? getTotalVariantsStock(currentVariants)
-              : prod.stock + qty;
+              : Number(prod.stock || 0) + qty;
 
             const serializedDesc = serializeProductSpecs({
               description: specs.description,
@@ -3495,17 +3532,64 @@ export const PuntoNexusProvider = ({ children }) => {
           }
         }
 
-        // Anular registro de venta en Supabase si es UUID
+        // Anular registro de venta en Supabase (por UUID y/o sold_at)
+        const updateFields = { 
+          status: 'Anulada',
+          cancelled: true,
+          cancelled_at: cancelledAt,
+          cancelled_by: userName,
+          cancellation_reason: cancellationReason || 'Sin motivo especificado'
+        };
+
         if (isUUID(saleId)) {
           await supabase
             .from('punto_nexus_sales')
-            .update({ 
-              status: 'Anulada',
-              cancelled_at: cancelledAt,
-              cancelled_by: userName,
-              cancellation_reason: cancellationReason || 'Sin motivo especificado'
-            })
+            .update(updateFields)
             .eq('id', saleId);
+        }
+        if (targetSale.sold_at) {
+          await supabase
+            .from('punto_nexus_sales')
+            .update(updateFields)
+            .eq('company_id', companyId)
+            .eq('sold_at', targetSale.sold_at);
+        }
+
+        // Anular también el ingreso financiero correspondiente
+        const docNumber = targetSale.reference_number ? `REF-${targetSale.reference_number}` : `PN-${String(saleId).slice(-8).toUpperCase()}`;
+        try {
+          await supabase
+            .from('punto_nexus_financial_incomes')
+            .update({ estado: 'Anulado' })
+            .eq('company_id', companyId)
+            .eq('numero_documento', docNumber);
+
+          if (targetSale.sold_at) {
+            const dateOnly = new Date(targetSale.sold_at).toISOString().split('T')[0];
+            await supabase
+              .from('punto_nexus_financial_incomes')
+              .update({ estado: 'Anulado' })
+              .eq('company_id', companyId)
+              .eq('fecha', dateOnly);
+          }
+        } catch (incErr) {
+          console.warn("[Nexus DB] Aviso anulando ingreso financiero en Supabase:", incErr);
+        }
+
+        // Actualizar localStorage de ingresos financieros si existían
+        const mockIncomesKey = `nexus_gestion_incomes_${companyId}`;
+        const localIncomes = localStorage.getItem(mockIncomesKey);
+        if (localIncomes) {
+          try {
+            const parsed = JSON.parse(localIncomes);
+            const updated = parsed.map(inc => {
+              if (inc.doc_number === docNumber || (saleId && inc.id && inc.id.includes(String(saleId)))) {
+                return { ...inc, state: 'Anulado', status: 'Anulado' };
+              }
+              return inc;
+            });
+            localStorage.setItem(mockIncomesKey, JSON.stringify(updated));
+          } catch (e) {}
         }
 
         persistLocalInventory(updatedInv);
@@ -3515,6 +3599,28 @@ export const PuntoNexusProvider = ({ children }) => {
           : [updatedSale, ...sales.filter(s => !isSameSale(s))];
         setSales(newSalesList);
         persistLocalSales(newSalesList);
+
+        (branches || []).forEach(b => {
+          const key = `punto_nexus_sales_${companyId}_${b.id}`;
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              const updated = parsed.map(s => isSameSale(s) ? updatedSale : s);
+              localStorage.setItem(key, JSON.stringify(updated));
+            } catch (e) {}
+          }
+        });
+
+        const generalKey = `punto_nexus_sales_${companyId}`;
+        const rawGen = localStorage.getItem(generalKey);
+        if (rawGen) {
+          try {
+            const parsed = JSON.parse(rawGen);
+            const updated = parsed.map(s => isSameSale(s) ? updatedSale : s);
+            localStorage.setItem(generalKey, JSON.stringify(updated));
+          } catch (e) {}
+        }
 
         setLoading(false);
         return { success: true, sale: updatedSale };
@@ -4315,10 +4421,11 @@ export const PuntoNexusProvider = ({ children }) => {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
 
-    // 2. Si hay conexión activa con Supabase, vaciar tabla remota de ventas
+    // 2. Si hay conexión activa con Supabase, vaciar tabla remota de ventas e ingresos financieros
     if (companyId && isUUID(companyId)) {
       try {
         await supabase.from('punto_nexus_sales').delete().eq('company_id', companyId);
+        await supabase.from('punto_nexus_financial_incomes').delete().eq('company_id', companyId);
       } catch (e) {
         console.warn("Aviso al vaciar ventas en Supabase:", e);
       }
@@ -4327,12 +4434,95 @@ export const PuntoNexusProvider = ({ children }) => {
     return { success: true };
   };
 
-  const deleteSalePermanently = async (saleId) => {
-    if (!saleId) return { error: "ID de venta no válido." };
+  const deleteSalePermanently = async (saleInput) => {
+    let targetSale = null;
+    let saleId = null;
 
-    setRawDbSales(prev => prev.filter(s => String(s.id) !== String(saleId)));
+    if (typeof saleInput === 'object' && saleInput !== null) {
+      targetSale = saleInput;
+      saleId = saleInput.id || saleInput.sale_id || saleInput._id;
+    } else if (saleInput) {
+      saleId = String(saleInput);
+      targetSale = sales.find(s => 
+        (s.id && String(s.id) === saleId) || 
+        (s.sale_id && String(s.sale_id) === saleId) ||
+        (s.sold_at && String(s.sold_at) === saleId)
+      );
+    }
+
+    if (!targetSale && !saleId) return { error: "Venta no encontrada." };
+
+    const soldAt = targetSale?.sold_at;
+    const isSameSale = (s) => {
+      if (!s) return false;
+      if (saleId && s.id && String(s.id) === String(saleId)) return true;
+      if (soldAt && s.sold_at && s.sold_at === soldAt) return true;
+      return false;
+    };
+
+    // 1. Si la venta NO estaba previamente anulada, reponer stock al inventario
+    if (targetSale && targetSale.status !== 'Anulada' && !targetSale.cancelled) {
+      const itemsToRestore = targetSale.items || [];
+      const updatedInv = applySaleRestorationsToInventory(inventory, itemsToRestore);
+      setInventory(updatedInv);
+      persistLocalInventory(updatedInv);
+
+      // Reponer en Supabase
+      if (companyId && isUUID(companyId)) {
+        for (const item of itemsToRestore) {
+          const qty = Number(item.cantidad || item.quantity || 1);
+          const prod = inventory.find(p => 
+            (item.part_id && item.part_id === p.id) || 
+            (item.id && item.id === p.id) ||
+            (item.sku && (item.sku === p.sku || cleanSkuDisplay(item.sku) === cleanSkuDisplay(p.sku))) || 
+            ((item.nombre || item.name) && (item.nombre || item.name) === (p.name || p.nombre))
+          );
+          if (prod && !prod.sku?.startsWith('SERV-') && prod.stock !== 999) {
+            const specs = parseProductSpecs(prod);
+            let currentVariants = specs.variants && specs.variants.length > 0 ? [...specs.variants] : [];
+            const varColor = item.selectedVariant?.color || item.color;
+            const varId = item.selectedVariant?.id;
+            if ((varId || varColor) && currentVariants.length > 0) {
+              const targetColor = (varColor || '').toLowerCase();
+              currentVariants = currentVariants.map(v => {
+                if (v.id === varId || (targetColor && v.color?.toLowerCase() === targetColor)) {
+                  return { ...v, stock: (Number(v.stock) || 0) + qty };
+                }
+                return v;
+              });
+            }
+
+            const newStock = currentVariants.length > 0
+              ? getTotalVariantsStock(currentVariants)
+              : Number(prod.stock || 0) + qty;
+
+            const serializedDesc = serializeProductSpecs({
+              description: specs.description,
+              dimensions: specs.dimensions,
+              materials: specs.materials,
+              owner_notes: specs.owner_notes,
+              images: specs.images,
+              variants: currentVariants
+            });
+
+            const updateDbPayload = { stock: newStock, description: serializedDesc };
+            if (prod.id && isUUID(prod.id)) {
+              await supabase.from('punto_nexus_inventory').update(updateDbPayload).eq('id', prod.id);
+            } else if (prod.sku) {
+              const bId = prod.branch_id || activeBranchId || 'branch-matriz';
+              const cleanSku = cleanSkuDisplay(prod.sku || '');
+              const encodedSku = bId && bId !== 'branch-matriz' ? `${cleanSku}[b:${bId}]`.trim() : cleanSku;
+              await supabase.from('punto_nexus_inventory').update(updateDbPayload).eq('company_id', companyId).eq('sku', encodedSku);
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Limpiar de memoria y de localStorage
+    setRawDbSales(prev => prev.filter(s => !isSameSale(s)));
     setSales(prev => {
-      const updated = prev.filter(s => String(s.id) !== String(saleId));
+      const updated = prev.filter(s => !isSameSale(s));
       const branchSalesKey = `punto_nexus_sales_${companyId}_${activeBranchId}`;
       localStorage.setItem(branchSalesKey, JSON.stringify(updated));
       return updated;
@@ -4344,30 +4534,59 @@ export const PuntoNexusProvider = ({ children }) => {
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          const filtered = parsed.filter(s => String(s.id) !== String(saleId));
+          const filtered = parsed.filter(s => !isSameSale(s));
           localStorage.setItem(key, JSON.stringify(filtered));
         } catch (e) {}
       }
     });
 
-    if (companyId && isUUID(companyId) && isUUID(saleId)) {
+    const generalKey = `punto_nexus_sales_${companyId}`;
+    const rawGen = localStorage.getItem(generalKey);
+    if (rawGen) {
       try {
-        const { error: dbErr } = await supabase
-          .from('punto_nexus_sales')
-          .delete()
-          .eq('id', saleId);
+        const parsed = JSON.parse(rawGen);
+        const filtered = parsed.filter(s => !isSameSale(s));
+        localStorage.setItem(generalKey, JSON.stringify(filtered));
+      } catch (e) {}
+    }
 
-        if (dbErr) {
-          console.warn("[Nexus DB] Aviso al borrar venta en Supabase:", dbErr.message);
-          await supabase
-            .from('punto_nexus_sales')
-            .delete()
-            .eq('company_id', companyId)
-            .eq('id', String(saleId));
+    // 3. Eliminar de Supabase (por UUID y/o sold_at)
+    if (companyId && isUUID(companyId)) {
+      try {
+        if (saleId && isUUID(saleId)) {
+          await supabase.from('punto_nexus_sales').delete().eq('company_id', companyId).eq('id', saleId);
+        }
+        if (soldAt) {
+          await supabase.from('punto_nexus_sales').delete().eq('company_id', companyId).eq('sold_at', soldAt);
+        }
+
+        // Eliminar ingreso financiero correspondiente
+        const docNumber = targetSale?.reference_number ? `REF-${targetSale.reference_number}` : (saleId ? `PN-${String(saleId).slice(-8).toUpperCase()}` : null);
+        if (docNumber) {
+          await supabase.from('punto_nexus_financial_incomes').delete().eq('company_id', companyId).eq('numero_documento', docNumber);
+        }
+        if (soldAt) {
+          const dateOnly = new Date(soldAt).toISOString().split('T')[0];
+          await supabase.from('punto_nexus_financial_incomes').delete().eq('company_id', companyId).eq('fecha', dateOnly);
         }
       } catch (e) {
         console.warn("[Nexus DB] Excepción al borrar venta en Supabase:", e);
       }
+    }
+
+    // Limpiar ingresos financieros de localStorage
+    const mockIncomesKey = `nexus_gestion_incomes_${companyId}`;
+    const localIncomes = localStorage.getItem(mockIncomesKey);
+    if (localIncomes) {
+      try {
+        const parsed = JSON.parse(localIncomes);
+        const filtered = parsed.filter(inc => {
+          if (saleId && inc.id && inc.id.includes(String(saleId))) return false;
+          if (targetSale?.reference_number && inc.doc_number && inc.doc_number.includes(targetSale.reference_number)) return false;
+          return true;
+        });
+        localStorage.setItem(mockIncomesKey, JSON.stringify(filtered));
+      } catch (e) {}
     }
 
     return { success: true };
@@ -4499,7 +4718,34 @@ export const PuntoNexusProvider = ({ children }) => {
 
   // Consolidación de TODAS las ventas de TODAS las sucursales (BD + LocalStorage de cada sucursal)
   const allCompanySales = useMemo(() => {
-    const map = new Map();
+    const list = [];
+
+    const getMatchIndex = (item) => {
+      return list.findIndex(existing => {
+        if (item.id && existing.id && String(item.id) === String(existing.id)) return true;
+        if (item.sold_at && existing.sold_at && String(item.sold_at) === String(existing.sold_at)) return true;
+        return false;
+      });
+    };
+
+    const addOrMerge = (s, defaultBranch = 'branch-matriz') => {
+      if (!s) return;
+      const bId = s.branch_id || extractSaleBranchId(s, defaultBranch);
+      const idx = getMatchIndex(s);
+      if (idx >= 0) {
+        const existing = list[idx];
+        const isAnulada = existing.status === 'Anulada' || existing.cancelled || s.status === 'Anulada' || s.cancelled;
+        list[idx] = {
+          ...existing,
+          ...s,
+          branch_id: bId || existing.branch_id,
+          status: isAnulada ? 'Anulada' : (s.status || existing.status || 'Completada'),
+          cancelled: !!isAnulada
+        };
+      } else {
+        list.push({ ...s, branch_id: bId });
+      }
+    };
 
     // 1. Cargar ventas de LocalStorage de TODAS las sucursales conocidas
     (branches || [DEFAULT_MAIN_BRANCH]).forEach(b => {
@@ -4509,12 +4755,7 @@ export const PuntoNexusProvider = ({ children }) => {
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            parsed.forEach(s => {
-              if (!s) return;
-              const key = String(s.id || s.sold_at);
-              const bId = s.branch_id || extractSaleBranchId(s, b.id);
-              map.set(key, { ...s, branch_id: bId });
-            });
+            parsed.forEach(s => addOrMerge(s, b.id));
           }
         } catch (e) {}
       }
@@ -4527,41 +4768,37 @@ export const PuntoNexusProvider = ({ children }) => {
       try {
         const parsedGen = JSON.parse(generalRaw);
         if (Array.isArray(parsedGen)) {
-          parsedGen.forEach(s => {
-            if (!s) return;
-            const key = String(s.id || s.sold_at);
-            if (!map.has(key)) {
-              const bId = s.branch_id || extractSaleBranchId(s, 'branch-matriz');
-              map.set(key, { ...s, branch_id: bId });
-            }
-          });
+          parsedGen.forEach(s => addOrMerge(s, 'branch-matriz'));
         }
       } catch (e) {}
     }
 
     // 3. Fusionar ventas locales de la sucursal activa
-    (sales || []).forEach(s => {
-      if (!s) return;
-      const key = String(s.id || s.sold_at);
-      const bId = s.branch_id || extractSaleBranchId(s, activeBranchId);
-      map.set(key, { ...s, branch_id: bId });
-    });
+    (sales || []).forEach(s => addOrMerge(s, activeBranchId));
 
     // 4. Fusionar ventas globales provenientes de Supabase
     (rawDbSales || []).forEach(s => {
       if (!s) return;
-      const key = String(s.id || s.sold_at);
-      const localMatch = map.get(key);
+      const idx = getMatchIndex(s);
+      const localMatch = idx >= 0 ? list[idx] : null;
       const bId = s.branch_id || extractSaleBranchId(s, localMatch?.branch_id || 'branch-matriz');
-
-      map.set(key, {
+      const isAnulada = (localMatch && (localMatch.status === 'Anulada' || localMatch.cancelled)) || s.status === 'Anulada' || s.cancelled;
+      const mergedObj = {
         ...s,
         ...localMatch,
-        branch_id: bId
-      });
+        branch_id: bId,
+        status: isAnulada ? 'Anulada' : (s.status || localMatch?.status || 'Completada'),
+        cancelled: !!isAnulada
+      };
+
+      if (idx >= 0) {
+        list[idx] = mergedObj;
+      } else {
+        list.push(mergedObj);
+      }
     });
 
-    return Array.from(map.values()).sort((a, b) => new Date(b.sold_at || 0) - new Date(a.sold_at || 0));
+    return list.sort((a, b) => new Date(b.sold_at || 0) - new Date(a.sold_at || 0));
   }, [rawDbSales, sales, branches, companyId, activeBranchId, DEFAULT_MAIN_BRANCH]);
 
   // Ventas filtradas estrictamente por la sucursal activa

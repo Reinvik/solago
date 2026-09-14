@@ -15,6 +15,8 @@ export default function SalesHistory() {
   const [selectedSale, setSelectedSale] = useState(null);
   const [annulLoading, setAnnulLoading] = useState(false);
   const [pendingAnnulSale, setPendingAnnulSale] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [pendingDeleteSale, setPendingDeleteSale] = useState(null);
 
   // Estados de edición de Factura / Cliente
   const [editingInvoiceSale, setEditingInvoiceSale] = useState(null);
@@ -142,6 +144,29 @@ export default function SalesHistory() {
       alert(`✅ ${docType} N° ${displayId} anulada con éxito por ${cancelledBy}.\nMotivo registrado: "${reason || 'Sin motivo'}"`);
       if (selectedSale) {
         setSelectedSale(res.sale || { ...sale, status: 'Anulada', cancelled: true, cancelled_by: cancelledBy, cancellation_reason: reason });
+      }
+    }
+  };
+
+  const requestDeleteSale = (sale) => {
+    setPendingDeleteSale(sale);
+  };
+
+  const confirmDeleteSale = async () => {
+    if (!pendingDeleteSale) return;
+    const saleToDelete = pendingDeleteSale;
+    setDeleteLoading(true);
+    const res = await deleteSalePermanently(saleToDelete);
+    setDeleteLoading(false);
+    setPendingDeleteSale(null);
+
+    if (res && res.error) {
+      alert(`❌ Error al eliminar la venta: ${res.error}`);
+    } else {
+      const displayId = saleToDelete.id ? String(saleToDelete.id).slice(-8).toUpperCase() : 'DOCUMENTO';
+      alert(`✅ Venta N° ${displayId} eliminada permanentemente del sistema e inventario devuelto.`);
+      if (selectedSale && (selectedSale.id === saleToDelete.id || selectedSale.sold_at === saleToDelete.sold_at)) {
+        setSelectedSale(null);
       }
     }
   };
@@ -454,6 +479,16 @@ export default function SalesHistory() {
                               <XCircle size={13} />
                             </button>
                           )}
+
+                          {/* Botón Eliminar Venta Definitivamente */}
+                          <button
+                            className="btn-secondary"
+                            style={{ padding: '5px 6px', borderRadius: '8px', fontSize: '11px', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+                            onClick={() => requestDeleteSale(sale)}
+                            title="Eliminar permanentemente del sistema"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -693,6 +728,29 @@ export default function SalesHistory() {
                   </button>
                 )}
 
+                {/* Eliminar Venta Definitivamente desde Modal */}
+                <button
+                  type="button"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: '#ef4444',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  disabled={deleteLoading}
+                  onClick={() => requestDeleteSale(selectedSale)}
+                >
+                  <Trash2 size={15} />
+                  <span>Eliminar Venta</span>
+                </button>
+
                 <button className="btn-secondary" onClick={() => setSelectedSale(null)}>
                   Cerrar
                 </button>
@@ -821,6 +879,17 @@ export default function SalesHistory() {
         user={user}
         title="Autorización & Motivo de Anulación"
         actionName={pendingAnnulSale ? `anular la ${pendingAnnulSale.document_type || 'Venta'} N° ${String(pendingAnnulSale.id).slice(-8).toUpperCase()}` : "anular esta venta"}
+      />
+
+      {/* MODAL SOLICITUD CLAVE ADMIN PARA ELIMINAR VENTA PERMANENTEMENTE */}
+      <AdminPasswordModal
+        isOpen={!!pendingDeleteSale}
+        onClose={() => setPendingDeleteSale(null)}
+        onConfirm={confirmDeleteSale}
+        requireReason={false}
+        user={user}
+        title="Autorización para Eliminar Venta"
+        actionName={pendingDeleteSale ? `eliminar definitivamente la ${pendingDeleteSale.document_type || 'Venta'} N° ${String(pendingDeleteSale.id).slice(-8).toUpperCase()} del sistema y devolver su stock` : "eliminar definitivamente esta venta"}
       />
 
     </div>
