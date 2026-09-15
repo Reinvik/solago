@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { usePuntoNexus } from '../context/PuntoNexusContext';
+import { usePuntoNexus, isNexusOwnerAccount } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { 
   Building2, PlusCircle, TrendingUp, Award, DollarSign, Package, User, MapPin, 
@@ -1108,11 +1108,11 @@ export default function BranchesControl({ setActiveTab }) {
                               fontWeight: 800,
                               padding: '4px 10px',
                               borderRadius: '8px',
-                              background: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#dcfce7' : '#f1f5f9',
-                              color: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#15803d' : '#475569',
+                              background: (isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase())) ? '#dcfce7' : '#f1f5f9',
+                              color: (isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase())) ? '#15803d' : '#475569',
                               border: '1px solid rgba(0,0,0,0.05)'
                             }}>
-                              {u.role || 'Cajero'}
+                              {(isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || (u.role || '').toLowerCase() === 'nexusowner') ? '👑 Nexus Owner' : (u.role || 'Cajero')}
                             </span>
                           </td>
 
@@ -1767,8 +1767,8 @@ export default function BranchesControl({ setActiveTab }) {
                             </div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#dcfce7' : '#f1f5f9', color: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#15803d' : '#475569' }}>
-                          {u.role || 'Cajero'}
+                        <span style={{ fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: (isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase())) ? '#dcfce7' : '#f1f5f9', color: (isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase())) ? '#15803d' : '#475569' }}>
+                          {(isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name) || (u.role || '').toLowerCase() === 'nexusowner') ? '👑 Nexus Owner' : (u.role || 'Cajero')}
                         </span>
                       </label>
                     );
@@ -2003,7 +2003,7 @@ export default function BranchesControl({ setActiveTab }) {
                 .map(u => {
                   const idKey = u.id || u.email;
                   const state = assignUsersState[idKey] || { isPrimary: false, hasAccess: false };
-                  const isOwnerOrAdmin = ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase());
+                  const isOwnerOrAdmin = ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) || isNexusOwnerAccount(u.email) || isNexusOwnerAccount(u.full_name);
 
                   return (
                     <div

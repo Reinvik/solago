@@ -137,6 +137,20 @@ export const PuntoNexusProvider = ({ children }) => {
     return null;
   });
 
+  const isNexusOwner = useMemo(() => {
+    return Boolean(
+      (user?.role && ['nexusowner', 'nexus_owner', 'owner', 'superuser', 'super_admin', 'superadmin'].includes(String(user.role).toLowerCase())) ||
+      isNexusOwnerAccount(user?.email) ||
+      isNexusOwnerAccount(user?.name) ||
+      (user?.email && String(user.email).toLowerCase().includes('albenis')) ||
+      (user?.email && String(user.email).toLowerCase().includes('ricardo')) ||
+      (user?.email && String(user.email).toLowerCase().includes('ariel')) ||
+      (user?.name && String(user.name).toLowerCase().includes('albenis')) ||
+      (user?.name && String(user.name).toLowerCase().includes('ricardo')) ||
+      (user?.name && String(user.name).toLowerCase().includes('ariel'))
+    );
+  }, [user]);
+
   const [companyId, setCompanyId] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -2516,45 +2530,33 @@ export const PuntoNexusProvider = ({ children }) => {
   };
 
   // --- OWNER / ADMINISTRADOR GENERAL ---
-  const getAllCompanies = async () => {
-    const isMock = !isUUID(companyId);
-    if (isMock) {
-      return {
-        companies: [
-          { id: 'company-123', name: 'SoLago' },
-          { id: 'company-mock-2', name: 'Canasta Express' }
-        ],
-        error: null
-      };
-    } else {
-      setLoading(true);
-      try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de red Supabase')), 3500));
-        const fetchPromise = supabase
-          .schema('public')
-          .from('companies')
-          .select('id, name')
-          .order('name', { ascending: true });
+  const getAllCompanies = useCallback(async () => {
+    try {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de red Supabase')), 4000));
+      const fetchPromise = supabase
+        .schema('public')
+        .from('companies')
+        .select('id, name')
+        .order('name', { ascending: true });
 
-        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
-        if (error) throw error;
-        setLoading(false);
-        return { companies: data && data.length > 0 ? data : [{ id: companyId, name: companyName || 'SoLago' }], error: null };
-      } catch (err) {
-        console.warn("Error o timeout consultando tiendas en Supabase, utilizando fallback local:", err);
-        setLoading(false);
-        return { 
-          companies: [
-            { id: companyId || 'd00de100-3333-4444-5555-666677778888', name: companyName || 'SoLago' },
-            { id: 'company-123', name: 'SoLago (Local)' },
-            { id: 'company-mock-2', name: 'Canasta Express (Local)' }
-          ], 
-          error: null 
-        };
+      if (!error && data && data.length > 0) {
+        return { companies: data, error: null };
       }
+    } catch (err) {
+      console.warn("Aviso consultando empresas en Supabase:", err);
     }
-  };
+
+    return { 
+      companies: [
+        { id: companyId || 'd00de100-3333-4444-5555-666677778888', name: companyName || 'SoLago' },
+        { id: 'ab44c21a-d7d2-4688-910a-5e9dbe585e07', name: 'Inversiones Anubis Maracaibo' },
+        { id: '12195049-3726-475c-a3a5-a6f60e69a011', name: 'INSUGOSCA' }
+      ], 
+      error: null 
+    };
+  }, [companyId, companyName]);
 
   const createCompany = async (name, options = {}) => {
     const isMock = !isUUID(companyId);
@@ -2719,12 +2721,55 @@ export const PuntoNexusProvider = ({ children }) => {
     return { user: newUserObj, error: null };
   };
 
-  const selectCompany = (id, name) => {
+  const selectCompany = useCallback((id, name) => {
+    if (!id) return;
     setCompanyId(id);
-    setCompanyName(name);
+    if (name) setCompanyName(name);
     localStorage.setItem('punto_nexus_company_id', id);
-    localStorage.setItem('punto_nexus_company_name', name);
-  };
+    if (name) localStorage.setItem('punto_nexus_company_name', name);
+
+    // 1. Limpiar parámetros obsoletos de URL (b, branch, sucursal, mesa) y fijar la nueva empresa
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('c', id);
+        if (name) url.searchParams.set('empresa', name);
+        url.searchParams.delete('company_id');
+        url.searchParams.delete('company');
+        url.searchParams.delete('tienda');
+        url.searchParams.delete('b');
+        url.searchParams.delete('branch');
+        url.searchParams.delete('sucursal');
+        url.searchParams.delete('mesa');
+        window.history.replaceState({}, '', url.toString());
+      } catch (e) {
+        console.warn('Error actualizando URL en selectCompany:', e);
+      }
+    }
+
+    // 2. Restablecer la sucursal activa a la correspondiente de esta empresa o 'branch-matriz'
+    const targetBranchId = localStorage.getItem(`punto_nexus_active_branch_${id}`) || 'branch-matriz';
+    setActiveBranchId(targetBranchId);
+
+    // 3. Cargar caché local de sucursales de esta empresa si existe
+    const savedBranches = localStorage.getItem(`punto_nexus_branches_${id}`);
+    if (savedBranches) {
+      try {
+        const parsed = JSON.parse(savedBranches);
+        if (Array.isArray(parsed) && parsed.length > 0) setBranches(parsed);
+      } catch (e) {}
+    } else {
+      setBranches([DEFAULT_MAIN_BRANCH]);
+    }
+
+    // 4. Sincronizar inmediatamente desde base de datos Supabase
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      syncBranchesFromDB(id);
+      syncInventoryFromDB(id);
+      syncSalesFromDB(id);
+      syncSystemUsersFromDB(id);
+    }
+  }, [DEFAULT_MAIN_BRANCH, syncBranchesFromDB, syncInventoryFromDB, syncSalesFromDB, syncSystemUsersFromDB]);
 
   const logout = () => {
     setUser(null);
@@ -5306,6 +5351,7 @@ export const PuntoNexusProvider = ({ children }) => {
     createCompany,
     createAccount,
     selectCompany,
+    isNexusOwner,
     updateUserProfile,
     branches,
     activeBranchId,
