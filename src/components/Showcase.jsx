@@ -466,9 +466,13 @@ export default function Showcase({ isPublicView = false }) {
     }
   };
 
-  // Helper para asignar imagen de comida real si falta la foto
+  // Helper para asignar imagen: solo asigna comida por defecto si el giro es gastronomía
   const getProductImage = (prod) => {
+    if (!prod) return '';
     if (prod.image_url) return prod.image_url;
+    if (!isFoodBusiness) {
+      return ''; // En tiendas online/retail no se usan fotos de comida como fallback
+    }
     const name = (prod.name || '').toLowerCase();
     const cat = (prod.category || '').toLowerCase();
     if (name.includes('combo')) return '/images/combo_nexus.jpg';
@@ -484,6 +488,42 @@ export default function Showcase({ isPublicView = false }) {
     if (name.includes('café') || name.includes('coffee') || cat.includes('café')) return 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80';
     if (name.includes('torta') || name.includes('postre') || cat.includes('postre')) return '/images/malteada_oreo.jpg';
     return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80';
+  };
+
+  // Helper para asignar icono y texto contextual a cada categoría según el giro de la empresa
+  const getCategoryLabelWithIcon = (cat) => {
+    if (cat === 'ALL') {
+      return isFoodBusiness ? '🍔 Ver Todo el Menú' : '🛍️ Ver Todo el Catálogo';
+    }
+
+    if (isFoodBusiness) {
+      const lower = cat.toLowerCase();
+      if (lower.includes('hamburg') || lower.includes('burger')) return `🍔 ${cat}`;
+      if (lower.includes('pizza')) return `🍕 ${cat}`;
+      if (lower.includes('bebida') || lower.includes('refresco') || lower.includes('jugo')) return `🥤 ${cat}`;
+      if (lower.includes('postre') || lower.includes('dulce') || lower.includes('helado')) return `🍰 ${cat}`;
+      if (lower.includes('perro') || lower.includes('hot dog') || lower.includes('pepito')) return `🌭 ${cat}`;
+      if (lower.includes('arepa') || lower.includes('empanada') || lower.includes('antojito')) return `🫓 ${cat}`;
+      return `🍴 ${cat}`;
+    }
+
+    // Tienda Online / E-Commerce / Retail / Bazar / Chino / Ferretería
+    const lower = cat.toLowerCase();
+    if (lower.includes('hogar') || lower.includes('casa')) return `🏠 ${cat}`;
+    if (lower.includes('belleza') || lower.includes('cosmet') || lower.includes('cuidado') || lower.includes('estetica')) return `✨ ${cat}`;
+    if (lower.includes('deporte') || lower.includes('fitness') || lower.includes('gym')) return `⚽ ${cat}`;
+    if (lower.includes('cocina')) return `🍳 ${cat}`;
+    if (lower.includes('tecno') || lower.includes('celular') || lower.includes('electron') || lower.includes('gadget') || lower.includes('comput')) return `📱 ${cat}`;
+    if (lower.includes('juguete') || lower.includes('niño') || lower.includes('nino') || lower.includes('juego')) return `🧸 ${cat}`;
+    if (lower.includes('baño') || lower.includes('bano') || lower.includes('higiene') || lower.includes('aseo')) return `🛁 ${cat}`;
+    if (lower.includes('ropa') || lower.includes('moda') || lower.includes('calzado') || lower.includes('textil') || lower.includes('zapato')) return `👗 ${cat}`;
+    if (lower.includes('ferret') || lower.includes('herramienta') || lower.includes('construc')) return `🔧 ${cat}`;
+    if (lower.includes('auto') || lower.includes('repuesto') || lower.includes('moto') || lower.includes('mecanic')) return `⚙️ ${cat}`;
+    if (lower.includes('papel') || lower.includes('oficina') || lower.includes('escolar')) return `📚 ${cat}`;
+    if (lower.includes('mascota') || lower.includes('pet')) return `🐾 ${cat}`;
+    if (lower.includes('alimento') || lower.includes('abarrote') || lower.includes('lacteo')) return `🛒 ${cat}`;
+
+    return `🏷️ ${cat}`;
   };
 
   // Detectar mesa fijada en la URL (ej: ?mesa=1) o modalidades de Tienda Online (?mode=delivery, pickup)
@@ -1363,7 +1403,7 @@ export default function Showcase({ isPublicView = false }) {
                 type="text"
                 className="form-input"
                 style={{ width: '100%', padding: '10px 14px 10px 38px', borderRadius: '12px', background: '#ffffff', fontSize: '13px' }}
-                placeholder="Buscar en el menú (ej: hamburguesa, bebida, postre)..."
+                placeholder={isFoodBusiness ? "Buscar en el menú (ej: hamburguesa, bebida, postre)..." : "Buscar productos, categorías o artículos..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -1374,7 +1414,7 @@ export default function Showcase({ isPublicView = false }) {
               )}
             </div>
 
-            {/* Categorías estilo Chips con Iconos */}
+            {/* Categorías estilo Chips con Iconos Contextuales */}
             <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
               {categories.map(cat => (
                 <button
@@ -1383,17 +1423,17 @@ export default function Showcase({ isPublicView = false }) {
                   className={`tables-category-chip ${selectedCategory === cat ? 'active' : ''}`}
                   style={{ whiteSpace: 'nowrap' }}
                 >
-                  {cat === 'ALL' ? '🍔 Ver Todo el Menú' : `🍴 ${cat}`}
+                  {getCategoryLabelWithIcon(cat)}
                 </button>
               ))}
           </div>
         </div>
 
-        {/* Grid de Productos / Platillos con Fotos Gastronómicas en Alta Definición */}
+        {/* Grid de Productos / Artículos con Fotos en Alta Definición */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
           {filteredProducts.length === 0 ? (
               <div style={{ padding: '40px', gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
-                No se encontraron productos disponibles en el menú.
+                {isFoodBusiness ? 'No se encontraron productos disponibles en el menú.' : 'No se encontraron productos disponibles en el catálogo.'}
               </div>
             ) : (
               filteredProducts.map((prod, idx) => {
@@ -2432,7 +2472,7 @@ export default function Showcase({ isPublicView = false }) {
               className="btn-primary"
               style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}
             >
-              ¡Entendido! Volver al Menú
+              {isFoodBusiness ? '¡Entendido! Volver al Menú' : '¡Entendido! Volver a la Tienda'}
             </button>
           </div>
         </div>
@@ -2526,7 +2566,7 @@ export default function Showcase({ isPublicView = false }) {
                 className="btn-primary"
                 style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}
               >
-                {isOnline ? '¡Entendido! Volver a la Tienda' : '¡Entendido! Volver al Menú'}
+                {isOnline || !isFoodBusiness ? '¡Entendido! Volver a la Tienda' : '¡Entendido! Volver al Menú'}
               </button>
             </div>
           </div>
