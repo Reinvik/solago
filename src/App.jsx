@@ -60,15 +60,33 @@ function AppContent() {
     name: '', address: '', phone: '', manager: ''
   });
 
-  // Detectar si la URL fue abierta mediante un escáner de QR o link directo de cliente
+  // Detectar si la URL fue abierta mediante un link público para compras del cliente o código QR
   const isCustomerMenuUrl = useMemo(() => {
+    if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
+
+    // Si el usuario solicitó explícitamente la vista de login o panel admin
+    if (params.get('login') === 'true' || params.get('admin') === 'true') {
+      return false;
+    }
+
     return (
+      params.has('empresa') ||
+      params.has('company') ||
+      params.has('company_name') ||
+      params.has('c') ||
+      params.has('company_id') ||
+      params.has('tienda') ||
+      params.has('store') ||
+      params.has('shop') ||
+      params.has('catalogo') ||
+      params.has('vitrina') ||
       params.has('mesa') || 
       params.has('table') || 
       params.has('m') || 
       params.has('mode') || 
       params.get('view') === 'showcase' || 
+      params.get('view') === 'vitrina' || 
       params.get('menu') === 'true'
     );
   }, []);
@@ -140,14 +158,14 @@ function AppContent() {
     }
   }, [companySettings?.logo_url, companyName]);
 
-  // Si se detectó URL de menú cliente QR y el usuario no ha forzado volver al admin:
+  // Si se detectó URL de menú cliente QR / Tienda Online y el usuario no ha forzado volver al admin:
   if (isCustomerMenuUrl && !overrideCustomerMenu) {
     return (
       <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '16px 12px' }}>
-        {user && (
+        {user ? (
           <div style={{ maxWidth: '880px', margin: '0 auto 16px auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a', padding: '10px 18px', borderRadius: '14px', color: '#ffffff', boxShadow: '0 4px 14px rgba(15,23,42,0.15)' }}>
             <span style={{ fontSize: '12px', fontWeight: 800, color: '#38bdf8' }}>
-              📱 VISTA DE CLIENTE QR ACTIVA ({user.name})
+              📱 VISTA DE CLIENTE ACTIVA ({user.name})
             </span>
             <button
               type="button"
@@ -158,6 +176,17 @@ function AppContent() {
               style={{ background: 'rgba(6, 182, 212, 0.2)', border: '1px solid #06b6d4', color: '#ffffff', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}
             >
               ⚙️ VOLVER AL PANEL ADMIN
+            </button>
+          </div>
+        ) : (
+          <div style={{ maxWidth: '880px', margin: '0 auto 8px auto', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setOverrideCustomerMenu(true)}
+              style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}
+              title="Acceso para cajeros y personal del negocio"
+            >
+              <span>⚙️ Acceso Personal / Iniciar Sesión</span>
             </button>
           </div>
         )}

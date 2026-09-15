@@ -140,8 +140,8 @@ export const PuntoNexusProvider = ({ children }) => {
   const [companyId, setCompanyId] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlCompId = params.get('c') || params.get('company_id');
-      if (urlCompId) {
+      const urlCompId = params.get('c') || params.get('company_id') || params.get('company') || params.get('tienda');
+      if (urlCompId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(urlCompId)) {
         localStorage.setItem('punto_nexus_company_id', urlCompId);
         return urlCompId;
       }
@@ -154,8 +154,8 @@ export const PuntoNexusProvider = ({ children }) => {
   const [companyName, setCompanyName] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlEmpresa = params.get('empresa') || params.get('company');
-      if (urlEmpresa) {
+      const urlEmpresa = params.get('empresa') || params.get('company_name') || params.get('company');
+      if (urlEmpresa && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(urlEmpresa)) {
         const decoded = decodeURIComponent(urlEmpresa);
         localStorage.setItem('punto_nexus_company_name', decoded);
         return decoded;
