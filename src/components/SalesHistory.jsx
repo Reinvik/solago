@@ -17,6 +17,8 @@ export default function SalesHistory() {
   const [pendingAnnulSale, setPendingAnnulSale] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [pendingDeleteSale, setPendingDeleteSale] = useState(null);
+  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
+  const [clearHistoryLoading, setClearHistoryLoading] = useState(false);
 
   // Estados de edición de Factura / Cliente
   const [editingInvoiceSale, setEditingInvoiceSale] = useState(null);
@@ -111,10 +113,20 @@ export default function SalesHistory() {
     });
   }, [branchScope, sales, allSales, extractSaleBranchId]);
 
-  const handleClearHistory = async () => {
-    if (window.confirm("¿Seguro que deseas eliminar todo el historial de ventas para comenzar desde 0?")) {
+  const handleClearHistory = () => {
+    setShowClearHistoryModal(true);
+  };
+
+  const confirmClearSalesHistory = async () => {
+    setShowClearHistoryModal(false);
+    setClearHistoryLoading(true);
+    try {
       await clearSalesHistory();
-      alert("✅ Historial de ventas reiniciado correctamente.");
+      alert("✅ Historial de ventas eliminado correctamente. El sistema ha comenzado desde cero.");
+    } catch (e) {
+      alert("❌ Error al vaciar el historial de ventas: " + (e?.message || e));
+    } finally {
+      setClearHistoryLoading(false);
     }
   };
 
@@ -296,6 +308,7 @@ export default function SalesHistory() {
           <button
             type="button"
             onClick={handleClearHistory}
+            disabled={clearHistoryLoading}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -307,13 +320,14 @@ export default function SalesHistory() {
               color: '#ef4444',
               fontSize: '12px',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: clearHistoryLoading ? 'not-allowed' : 'pointer',
+              opacity: clearHistoryLoading ? 0.6 : 1,
               transition: 'all 0.2s ease'
             }}
-            title="Vaciar historial de ventas para empezar desde 0"
+            title="Borrar todo el historial de ventas para empezar desde 0"
           >
             <Trash2 size={15} />
-            <span>Vaciar Historial</span>
+            <span>{clearHistoryLoading ? 'Borrando...' : 'Borrar Historial de Ventas'}</span>
           </button>
         </div>
       </div>
@@ -890,6 +904,21 @@ export default function SalesHistory() {
         user={user}
         title="Autorización para Eliminar Venta"
         actionName={pendingDeleteSale ? `eliminar definitivamente la ${pendingDeleteSale.document_type || 'Venta'} N° ${String(pendingDeleteSale.id).slice(-8).toUpperCase()} del sistema y devolver su stock` : "eliminar definitivamente esta venta"}
+      />
+
+      {/* MODAL SOLICITUD CLAVE ADMIN Y ESCRIBIR "Eliminar" PARA BORRAR HISTORIAL COMPLETO */}
+      <AdminPasswordModal
+        isOpen={showClearHistoryModal}
+        onClose={() => setShowClearHistoryModal(false)}
+        onConfirm={confirmClearSalesHistory}
+        requireReason={false}
+        requireConfirmationWord="Eliminar"
+        user={user}
+        title="⚠️ Borrar Historial de Ventas"
+        actionName="eliminar TODO el historial de ventas de la empresa"
+        description="Esta acción es irreversible y eliminará definitivamente todas las ventas e ingresos registrados para empezar desde cero. Para proceder, ingresa la clave de administrador y escribe la palabra de confirmación."
+        confirmButtonText="Eliminar Todo el Historial"
+        isDanger={true}
       />
 
     </div>
