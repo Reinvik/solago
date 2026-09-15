@@ -1485,7 +1485,7 @@ export default function Inventory() {
                                           }}
                                           title={`Color ${v.color}: ${vStock} unidades disponibles en inventario`}
                                         >
-                                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: v.hex || '#64748b', border: '1px solid rgba(0,0,0,0.15)', display: 'inline-block' }} />
+                                          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: v.hex || '#64748b', border: '1.5px solid #ffffff', boxShadow: '0 0 0 1px #94a3b8', display: 'inline-block', flexShrink: 0 }} />
                                           <span>{v.color}:</span>
                                           <strong style={{ fontWeight: 850 }}>{isOut ? 'Agotado' : `${vStock} unids`}</strong>
                                         </span>

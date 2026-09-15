@@ -51,6 +51,81 @@ export function unwrapDescription(rawDesc) {
   return current;
 }
 
+export const COLOR_NAME_MAP = {
+  'negro': '#1e293b',
+  'black': '#1e293b',
+  'blanco': '#ffffff',
+  'white': '#ffffff',
+  'gris': '#64748b',
+  'gray': '#64748b',
+  'grey': '#64748b',
+  'gris ceniza': '#9ca3af',
+  'gris oscuro': '#334155',
+  'gris claro': '#cbd5e1',
+  'rojo': '#ef4444',
+  'red': '#ef4444',
+  'rojo terracota': '#b91c1c',
+  'azul': '#2563eb',
+  'blue': '#2563eb',
+  'celeste': '#38bdf8',
+  'sky': '#38bdf8',
+  'azul petroleo': '#0e7490',
+  'azul petróleo': '#0e7490',
+  'azul marino': '#0f172a',
+  'navy': '#0f172a',
+  'verde': '#16a34a',
+  'green': '#16a34a',
+  'verde oliva': '#65a30d',
+  'oliva': '#65a30d',
+  'verde menta': '#6ee7b7',
+  'menta': '#6ee7b7',
+  'amarillo': '#eab308',
+  'yellow': '#eab308',
+  'mostaza': '#d97706',
+  'dorado': '#f59e0b',
+  'gold': '#f59e0b',
+  'plateado': '#94a3b8',
+  'silver': '#94a3b8',
+  'rosa': '#ec4899',
+  'rosado': '#ec4899',
+  'pink': '#ec4899',
+  'rosa palo': '#f472b6',
+  'fucsia': '#d946ef',
+  'morado': '#8b5cf6',
+  'purple': '#8b5cf6',
+  'violeta': '#7c3aed',
+  'lila': '#c084fc',
+  'naranja': '#f97316',
+  'orange': '#f97316',
+  'marron': '#78350f',
+  'marrón': '#78350f',
+  'marron cafe': '#78350f',
+  'marrón café': '#78350f',
+  'cafe': '#78350f',
+  'café': '#78350f',
+  'brown': '#78350f',
+  'beige': '#e8d8c3',
+  'beige arena': '#e8d8c3',
+  'arena': '#e8d8c3',
+  'turquesa': '#06b6d4',
+  'coral': '#fb7185',
+  'vino': '#881337',
+  'vinotinto': '#881337',
+  'burgundy': '#881337'
+};
+
+export function getColorHexByName(colorName, defaultHex = '#64748b') {
+  if (!colorName) return defaultHex;
+  const clean = String(colorName).trim().toLowerCase();
+  if (COLOR_NAME_MAP[clean]) return COLOR_NAME_MAP[clean];
+  for (const [name, hex] of Object.entries(COLOR_NAME_MAP)) {
+    if (clean.includes(name) || name.includes(clean)) {
+      return hex;
+    }
+  }
+  return defaultHex;
+}
+
 export function normalizeVariants(rawVariants) {
   if (!Array.isArray(rawVariants)) return [];
   return rawVariants
@@ -58,11 +133,15 @@ export function normalizeVariants(rawVariants) {
       if (!v) return null;
       const colorName = String(v.color || v.name || '').trim();
       if (!colorName) return null;
+      const rawHex = String(v.hex || '').trim();
+      const validHex = (rawHex && rawHex !== '#64748b' && rawHex !== '')
+        ? rawHex
+        : getColorHexByName(colorName, '#64748b');
       return {
         id: String(v.id || `var-${idx + 1}-${colorName.toLowerCase().replace(/[^a-z0-9]/g, '')}`),
         color: colorName,
         stock: Math.max(0, Math.floor(Number(v.stock) || 0)),
-        hex: String(v.hex || '#64748b').trim(),
+        hex: validHex,
         sku: String(v.sku || '').trim(),
         image_url: String(v.image_url || '').trim()
       };

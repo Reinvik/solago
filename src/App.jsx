@@ -13,10 +13,10 @@ import TablesModule from './components/TablesModule';
 import FinanceModule from './components/FinanceModule';
 import BranchesControl from './components/BranchesControl';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight, Store } from 'lucide-react';
 
 function AppContent() {
-  const { user, companyName, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate } = usePuntoNexus();
+  const { user, companyId, companyName, selectCompany, getAllCompanies, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate } = usePuntoNexus();
   const VALID_TABS = useMemo(() => [
     'dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'
   ], []);
@@ -53,9 +53,11 @@ function AppContent() {
   const [overrideCustomerMenu, setOverrideCustomerMenu] = useState(false);
   const [menuCollapsed, setMenuCollapsed] = useState(true); // por defecto contraído en móviles
 
-  // Estados de control de sucursales
+  // Estados de control de sucursales y tiendas
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [companiesList, setCompaniesList] = useState([]);
   const [newBranchForm, setNewBranchForm] = useState({
     name: '', address: '', phone: '', manager: ''
   });
@@ -450,6 +452,96 @@ function AppContent() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Selector de Tienda / Empresa para Nexus Owner */}
+            {isNexusOwner && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowCompanyDropdown(prev => !prev);
+                    if (companiesList.length === 0) {
+                      const res = await getAllCompanies();
+                      if (res && res.companies) setCompaniesList(res.companies);
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '7px 14px',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#6366f1',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Cambiar de Tienda / Empresa en el Ecosistema"
+                >
+                  <Store size={15} />
+                  <span style={{ maxWidth: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {companyName || 'Cambiar Tienda'}
+                  </span>
+                  <ChevronDown size={14} />
+                </button>
+
+                {showCompanyDropdown && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '110%',
+                    right: 0,
+                    width: '280px',
+                    background: '#ffffff',
+                    borderRadius: '14px',
+                    boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+                    border: '1px solid #e2e8f0',
+                    padding: '8px',
+                    zIndex: 9999,
+                    maxHeight: '320px',
+                    overflowY: 'auto'
+                  }}>
+                    <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Tiendas del Ecosistema ({companiesList.length})
+                    </div>
+                    {companiesList.map(c => (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          selectCompany(c.id, c.name);
+                          setShowCompanyDropdown(false);
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          background: c.id === companyId ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                          color: c.id === companyId ? '#6366f1' : '#0f172a',
+                          fontWeight: c.id === companyId ? 800 : 600,
+                          fontSize: '12px',
+                          marginBottom: '4px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Store size={14} />
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+                            {c.name}
+                          </span>
+                        </div>
+                        {c.id === companyId ? (
+                          <Check size={14} style={{ color: '#6366f1' }} />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Selector o Indicador de Sucursal Asignada */}
             <div style={{ position: 'relative' }}>
               {!isAdmin ? (

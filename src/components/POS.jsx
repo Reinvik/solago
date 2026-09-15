@@ -13,10 +13,11 @@ import {
   ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package, Palette
 } from 'lucide-react';
 import { hasProductVariants, getProductVariants, getVariantStock } from '../utils/productSpecs';
-const getProductImage = (prod) => {
+const getProductImage = (prod, isGastronomia = true) => {
   if (prod?.image_url) return prod.image_url;
   const name = (prod?.name || '').toLowerCase();
   const cat = (prod?.category || '').toLowerCase();
+
   if (name.includes('combo')) return '/images/combo_nexus.jpg';
   if (name.includes('hamburg') || name.includes('burger') || cat.includes('hamburg')) return '/images/burger_nexus.jpg';
   if (name.includes('pepito') || cat.includes('pepito')) return '/images/pepito_mixto.jpg';
@@ -29,6 +30,10 @@ const getProductImage = (prod) => {
   if (name.includes('bebida') || name.includes('soda') || name.includes('jugo') || name.includes('coca') || cat.includes('bebida')) return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=600&q=80';
   if (name.includes('café') || name.includes('coffee') || cat.includes('café')) return 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80';
   if (name.includes('torta') || name.includes('postre') || cat.includes('postre')) return '/images/malteada_oreo.jpg';
+  
+  if (!isGastronomia) {
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
+  }
   return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80';
 };
 
@@ -1775,7 +1780,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
               const isLowStock = !isService && product.stock <= product.min_stock;
               const isOutOfStock = !isService && product.stock <= 0;
               const isJustAdded = addedProdId === product.id;
-              const imageUrl = getProductImage(product);
+              const imageUrl = getProductImage(product, companySettings?.business_type === 'gastronomia');
               const cardKey = product.id ? `pos-card-${product.id}-${idx}` : `pos-card-sku-${product.sku || idx}-${idx}`;
 
               const matchingCartItems = cart.filter(c => getProdKey(c.part) === getProdKey(product));
@@ -1795,12 +1800,46 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                       <img src={imageUrl} alt={product.name} style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }} />
                       <span className="pos-sku-badge">{product.sku || 'S/N'}</span>
-                      <span className="pos-product-name" style={{ minHeight: 'unset', marginBottom: 0, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="pos-product-name" style={{ minHeight: 'unset', marginBottom: 0, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>{product.name}</span>
                         {hasVariants && (
-                          <span style={{ fontSize: '9.5px', fontWeight: 800, background: '#ede9fe', color: '#6d28d9', padding: '1px 6px', borderRadius: '4px', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <Palette size={10} />
-                            {prodVariants.length} colores
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap' }}>
+                            <span style={{ fontSize: '9.5px', fontWeight: 800, background: '#ede9fe', color: '#6d28d9', padding: '1px 6px', borderRadius: '4px', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              <Palette size={10} />
+                              {prodVariants.length} colores:
+                            </span>
+                            {prodVariants.map((v, vIdx) => (
+                              <span
+                                key={v.id || vIdx}
+                                title={`${v.color} (${v.stock} uds)`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  padding: '1px 5px',
+                                  borderRadius: '4px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  color: '#334155'
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    backgroundColor: v.hex || '#6366f1',
+                                    border: '1.5px solid #ffffff',
+                                    boxShadow: '0 0 0 1px #94a3b8',
+                                    display: 'inline-block',
+                                    flexShrink: 0
+                                  }}
+                                />
+                                <span>{v.color}</span>
+                              </span>
+                            ))}
                           </span>
                         )}
                         {(product.is_exempt || product.is_tax_exempt) && (
@@ -2018,22 +2057,72 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                         </span>
                       )}
                       {hasVariants && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                          <span style={{
-                            fontSize: '9.5px',
-                            fontWeight: 800,
-                            background: '#ede9fe',
-                            color: '#6d28d9',
-                            padding: '2px 7px',
-                            borderRadius: '5px',
-                            border: '1px solid #ddd6fe',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <Palette size={11} />
-                            {prodVariants.length} colores disp.
-                          </span>
+                        <div style={{ marginTop: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                            <span style={{
+                              fontSize: '9.5px',
+                              fontWeight: 800,
+                              background: '#ede9fe',
+                              color: '#6d28d9',
+                              padding: '2px 7px',
+                              borderRadius: '5px',
+                              border: '1px solid #ddd6fe',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <Palette size={11} />
+                              {prodVariants.length} colores disp.
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                            {prodVariants.map((v, vIdx) => {
+                              const vStock = Number(v.stock || 0);
+                              const isOut = vStock <= 0;
+                              return (
+                                <div
+                                  key={v.id || vIdx}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addToCart(product, null, v);
+                                  }}
+                                  title={`Color: ${v.color} (${vStock} unids) - Clic para agregar`}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '2px 6px',
+                                    borderRadius: '6px',
+                                    background: isOut ? '#f8fafc' : '#ffffff',
+                                    border: isOut ? '1px solid #e2e8f0' : '1.5px solid #cbd5e1',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                    cursor: isOut ? 'not-allowed' : 'pointer',
+                                    opacity: isOut ? 0.55 : 1,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: '12px',
+                                      height: '12px',
+                                      borderRadius: '50%',
+                                      backgroundColor: v.hex || '#6366f1',
+                                      border: '1.5px solid #ffffff',
+                                      boxShadow: '0 0 0 1px #94a3b8',
+                                      display: 'inline-block',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1e293b' }}>
+                                    {v.color}
+                                  </span>
+                                  <span style={{ fontSize: '9px', fontWeight: 800, color: isOut ? '#ef4444' : '#059669' }}>
+                                    ({vStock})
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>
