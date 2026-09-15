@@ -1539,8 +1539,11 @@ export const PuntoNexusProvider = ({ children }) => {
   const dedupeInventory = (items) => {
     if (!Array.isArray(items)) return [];
     const seen = new Set();
+    const mainBranch = (branches || []).find(b => b.is_main) || branches[0] || DEFAULT_MAIN_BRANCH;
+    const mainBranchId = mainBranch?.id || 'branch-matriz';
+
     return items.map(item => {
-      const bId = extractProductBranchId(item, 'branch-matriz');
+      const bId = extractProductBranchId(item, mainBranchId);
       const cleanSku = cleanSkuDisplay(item.sku || '');
       const cleanCat = cleanCategoryDisplay(item.category || item.categoria || '');
       const isExemptBool = !!item.is_exempt || !!item.is_tax_exempt;
@@ -1549,7 +1552,7 @@ export const PuntoNexusProvider = ({ children }) => {
       const itemVariants = specs.variants && specs.variants.length > 0 ? specs.variants : normalizeVariants(item.variants);
       return {
         ...item,
-        branch_id: bId,
+        branch_id: item.branch_id || bId,
         sku: cleanSku,
         category: cleanCat,
         is_exempt: isExemptBool,
@@ -1564,7 +1567,7 @@ export const PuntoNexusProvider = ({ children }) => {
       };
     }).filter(item => {
       if (!item) return false;
-      const key = `${item.branch_id || 'branch-matriz'}_${item.id || item.sku || item.name}`;
+      const key = `${item.branch_id || mainBranchId}_${item.id || item.sku || item.name}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -4802,34 +4805,54 @@ export const PuntoNexusProvider = ({ children }) => {
   }, [rawDbSales, sales, branches, companyId, activeBranchId, DEFAULT_MAIN_BRANCH]);
 
   // Ventas filtradas estrictamente por la sucursal activa
+  // Ventas filtradas estrictamente por la sucursal activa
   const activeBranchSales = useMemo(() => {
-    return allCompanySales.filter(s => {
-      const bId = extractSaleBranchId(s, 'branch-matriz');
-      return bId === activeBranchId;
+    const mainBranch = (branches || []).find(b => b.is_main) || branches[0] || DEFAULT_MAIN_BRANCH;
+    const mainBranchId = mainBranch?.id || 'branch-matriz';
+    const isViewingMainBranch = activeBranchId === mainBranchId || activeBranchId === 'branch-matriz' || activeBranch?.is_main || (branches || []).length <= 1;
+
+    return (allCompanySales || []).filter(s => {
+      const bId = extractSaleBranchId(s, mainBranchId);
+      if (bId === activeBranchId) return true;
+      if (isViewingMainBranch && (bId === 'branch-matriz' || bId === mainBranchId || !s.branch_id)) return true;
+      return false;
     });
-  }, [allCompanySales, activeBranchId]);
+  }, [allCompanySales, activeBranchId, branches, activeBranch, DEFAULT_MAIN_BRANCH]);
 
   // Inventario filtrado y aislado strictly por la sucursal activa
   const activeBranchInventory = useMemo(() => {
+    const mainBranch = (branches || []).find(b => b.is_main) || branches[0] || DEFAULT_MAIN_BRANCH;
+    const mainBranchId = mainBranch?.id || 'branch-matriz';
+    const isViewingMainBranch = activeBranchId === mainBranchId || activeBranchId === 'branch-matriz' || activeBranch?.is_main || (branches || []).length <= 1;
+
     const list = (inventory || []).filter(p => {
-      const bId = extractProductBranchId(p, 'branch-matriz');
-      return bId === activeBranchId;
+      const bId = extractProductBranchId(p, mainBranchId);
+      if (bId === activeBranchId) return true;
+      if (bId === 'all' || p.branch_id === 'all') return true;
+      // Si estamos en la sede principal y el producto no tiene sucursal secundaria específica asignada, mostrarlo en matriz
+      if (isViewingMainBranch && (bId === 'branch-matriz' || bId === mainBranchId || !p.branch_id)) {
+        return true;
+      }
+      return false;
     });
 
-    // Fallback amigable para clientes que abren Vitrina/QR sin haber especificado branch en la URL:
-    // Si la sucursal activa no tiene productos registrados, pero la empresa tiene productos en otra sucursal,
-    // y estamos en vista cliente (URL con mesa, mode, view, etc.), mostrar los productos para no dejar la carta en blanco.
-    if (list.length === 0 && (inventory || []).length > 0 && typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const hasExplicitBranch = params.has('b') || params.has('branch') || params.has('sucursal');
-      const isClientView = params.has('mesa') || params.has('table') || params.has('m') || params.has('mode') || params.get('view') === 'showcase' || params.get('menu') === 'true';
-      if (!hasExplicitBranch && isClientView) {
+    // Fallback garantizado para no ocultar el inventario si la empresa solo tiene una sede o estamos en matriz/vitrina
+    if (list.length === 0 && (inventory || []).length > 0) {
+      if (isViewingMainBranch || (branches || []).length <= 1) {
         return inventory;
+      }
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const hasExplicitBranch = params.has('b') || params.has('branch') || params.has('sucursal');
+        const isClientView = params.has('mesa') || params.has('table') || params.has('m') || params.has('mode') || params.get('view') === 'showcase' || params.get('menu') === 'true';
+        if (!hasExplicitBranch || isClientView) {
+          return inventory;
+        }
       }
     }
 
     return list;
-  }, [inventory, activeBranchId]);
+  }, [inventory, activeBranchId, branches, activeBranch, DEFAULT_MAIN_BRANCH]);
 
   // Alertas de stock crítico aisladas únicamente para la sucursal activa
   const lowStockItems = useMemo(() => {
