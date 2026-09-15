@@ -64,12 +64,20 @@ export default function BranchesControl({ setActiveTab }) {
   const [userBranchFilter, setUserBranchFilter] = useState('all');
   const [editingUserAccess, setEditingUserAccess] = useState(null);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserModalTab, setAddUserModalTab] = useState('existing'); // 'existing' | 'new'
+  const [selectedExistingUserId, setSelectedExistingUserId] = useState('');
 
   // Estados temporales del modal de edición de usuario
   const [editFormBranchId, setEditFormBranchId] = useState('branch-matriz');
   const [editFormRole, setEditFormRole] = useState('Cajero');
   const [editFormAccessAll, setEditFormAccessAll] = useState(true);
   const [editFormSelectedBranches, setEditFormSelectedBranches] = useState([]);
+
+  // Estado para Modal de Asignación Masiva de Personal a un Local específico
+  const [assignUsersModalBranch, setAssignUsersModalBranch] = useState(null);
+  const [assignUsersSearchTerm, setAssignUsersSearchTerm] = useState('');
+  const [assignUsersState, setAssignUsersState] = useState({}); // { [userIdOrEmail]: { isPrimary: bool, hasAccess: bool } }
+  const [savingAssignUsers, setSavingAssignUsers] = useState(false);
 
   // Estado del modal para nuevo usuario
   const [newUserData, setNewUserData] = useState({
@@ -82,6 +90,7 @@ export default function BranchesControl({ setActiveTab }) {
     selectedBranches: []
   });
 
+  // Estado para nueva sucursal y asignación de usuarios inicial
   const [newBranchData, setNewBranchData] = useState({
     name: '',
     address: '',
@@ -89,11 +98,79 @@ export default function BranchesControl({ setActiveTab }) {
     manager: '',
     code: ''
   });
+  const [newBranchManagerMode, setNewBranchManagerMode] = useState('select'); // 'select' | 'custom'
+  const [newBranchSelectedUsers, setNewBranchSelectedUsers] = useState([]);
 
   const monthNames = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
+
+  // Abrir modal de asignación de usuarios para una sucursal específica
+  const handleOpenAssignUsersModal = (b) => {
+    setAssignUsersModalBranch(b);
+    setAssignUsersSearchTerm('');
+    
+    const initialMap = {};
+    systemUsers.forEach(u => {
+      const idKey = u.id || u.email;
+      const isPrimary = (u.branch_id || 'branch-matriz') === b.id;
+      const allowed = u.allowed_branches || ['all'];
+      const hasAccess = Array.isArray(allowed) ? (allowed.includes('all') || allowed.includes(b.id)) : true;
+      initialMap[idKey] = {
+        isPrimary,
+        hasAccess,
+        role: u.role || 'Cajero'
+      };
+    });
+    setAssignUsersState(initialMap);
+  };
+
+  // Guardar asignación masiva de usuarios para una sucursal
+  const handleSaveAssignUsersSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!assignUsersModalBranch) return;
+
+    setSavingAssignUsers(true);
+    const bId = assignUsersModalBranch.id;
+
+    for (const u of systemUsers) {
+      const idKey = u.id || u.email;
+      const state = assignUsersState[idKey];
+      if (!state) continue;
+
+      const currentAllowed = Array.isArray(u.allowed_branches) ? u.allowed_branches : ['all'];
+      let newAllowed = [...currentAllowed];
+
+      if (state.hasAccess) {
+        if (!newAllowed.includes('all') && !newAllowed.includes(bId)) {
+          newAllowed.push(bId);
+        }
+      } else {
+        if (newAllowed.includes('all')) {
+          newAllowed = branches.map(br => br.id).filter(id => id !== bId);
+        } else {
+          newAllowed = newAllowed.filter(id => id !== bId);
+        }
+      }
+
+      let newPrimaryBranch = u.branch_id || 'branch-matriz';
+      if (state.isPrimary) {
+        newPrimaryBranch = bId;
+      } else if (newPrimaryBranch === bId && !state.hasAccess) {
+        newPrimaryBranch = 'branch-matriz';
+      }
+
+      await updateUserBranchAccess(u.id || u.email, {
+        branch_id: newPrimaryBranch,
+        allowed_branches: newAllowed
+      });
+    }
+
+    setSavingAssignUsers(false);
+    alert(`✅ Asignación de personal para "${assignUsersModalBranch.name}" guardada correctamente.`);
+    setAssignUsersModalBranch(null);
+  };
 
   // Abrir modal de edición de accesos de usuario
   const handleOpenEditUserAccess = (u) => {
@@ -137,9 +214,38 @@ export default function BranchesControl({ setActiveTab }) {
     }
   };
 
-  // Guardar nuevo usuario
+  // Guardar nuevo usuario o vincular usuario existente
   const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
+
+    if (addUserModalTab === 'existing') {
+      if (!selectedExistingUserId) {
+        alert('Por favor selecciona un usuario o administrador existente.');
+        return;
+      }
+      const existingUser = systemUsers.find(u => (u.id || u.email) === selectedExistingUserId);
+      if (!existingUser) return;
+
+      const finalAllowed = editFormAccessAll
+        ? ['all']
+        : (editFormSelectedBranches.length > 0 ? editFormSelectedBranches : [editFormBranchId]);
+
+      const res = await updateUserBranchAccess(existingUser.id || existingUser.email, {
+        branch_id: editFormBranchId,
+        allowed_branches: finalAllowed,
+        role: editFormRole,
+        full_name: existingUser.full_name || existingUser.name
+      });
+
+      if (res?.success) {
+        setShowAddUserModal(false);
+        alert(`✅ Sucursal y permisos actualizados para "${existingUser.full_name || existingUser.email}".`);
+      } else {
+        alert(`⚠️ ${res?.error || 'Error al actualizar permisos.'}`);
+      }
+      return;
+    }
+
     if (!newUserData.email.trim()) return;
 
     const finalAllowed = newUserData.accessAll
@@ -279,10 +385,28 @@ export default function BranchesControl({ setActiveTab }) {
     if (!newBranchData.name.trim()) return;
 
     setCreating(true);
-    await addBranch(newBranchData);
+    const res = await addBranch(newBranchData);
+    const createdBranchId = res?.branch?.id || res?.id;
+
+    // Asignar los usuarios/administradores seleccionados a esta nueva sucursal
+    if (createdBranchId && newBranchSelectedUsers.length > 0) {
+      for (const uId of newBranchSelectedUsers) {
+        const u = systemUsers.find(user => (user.id || user.email) === uId);
+        if (u) {
+          const currentAllowed = Array.isArray(u.allowed_branches) ? u.allowed_branches : ['all'];
+          const newAllowed = currentAllowed.includes('all') ? ['all'] : [...currentAllowed, createdBranchId];
+          await updateUserBranchAccess(u.id || u.email, {
+            allowed_branches: newAllowed
+          });
+        }
+      }
+    }
+
     setCreating(false);
     setShowAddModal(false);
     setNewBranchData({ name: '', address: '', phone: '', manager: '', code: '' });
+    setNewBranchSelectedUsers([]);
+    setNewBranchManagerMode('select');
     alert(`✅ Sucursal "${newBranchData.name}" registrada con éxito.`);
   };
 
@@ -552,6 +676,15 @@ export default function BranchesControl({ setActiveTab }) {
                             <Edit3 size={12} />
                             <span>Editar</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAssignUsersModal(b)}
+                            style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.3)', color: '#4f46e5', borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                            title="Asignar o desasignar usuarios y administradores a este local"
+                          >
+                            <Users size={12} />
+                            <span>Asignar Personal</span>
+                          </button>
                           {!b.isMain && b.id !== 'branch-matriz' && (
                             <button
                               type="button"
@@ -575,8 +708,17 @@ export default function BranchesControl({ setActiveTab }) {
                     <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px' }}>
                       {b.address && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={13} /> {b.address}</div>}
                       {b.manager && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><User size={13} /> Manager: <strong>{b.manager}</strong></div>}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369a1', fontWeight: 700 }}>
-                        <Users size={13} /> Personal Asignado: <strong>{b.assignedUsersCount} {b.assignedUsersCount === 1 ? 'usuario' : 'usuarios'}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#0369a1', fontWeight: 700 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Users size={13} /> Personal Asignado: <strong>{b.assignedUsersCount} {b.assignedUsersCount === 1 ? 'usuario' : 'usuarios'}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignUsersModal(b)}
+                          style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1', borderRadius: '6px', padding: '2px 8px', fontSize: '10.5px', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          + Asignar / Ver
+                        </button>
                       </div>
                     </div>
 
@@ -689,9 +831,27 @@ export default function BranchesControl({ setActiveTab }) {
                         {b.manager || 'No asignado'}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 9px', borderRadius: '99px', background: 'rgba(6,182,212,0.1)', color: '#0284c7' }}>
-                          👥 {b.assignedUsersCount}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignUsersModal(b)}
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '4px 10px',
+                            borderRadius: '99px',
+                            background: 'rgba(6,182,212,0.1)',
+                            color: '#0284c7',
+                            border: '1px solid rgba(6,182,212,0.25)',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Clic para gestionar y asignar usuarios a este local"
+                        >
+                          <Users size={12} />
+                          <span>{b.assignedUsersCount} {b.assignedUsersCount === 1 ? 'usuario' : 'usuarios'}</span>
+                        </button>
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 900, color: '#0f172a' }}>
                         {formatCurrency(b.totalSales)}
@@ -708,13 +868,23 @@ export default function BranchesControl({ setActiveTab }) {
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => switchBranch(b.id)}
-                          style={{ padding: '5px 12px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', background: activeBranchId === b.id ? '#f1f5f9' : 'var(--color-cyan)', color: activeBranchId === b.id ? '#64748b' : '#fff', border: 'none', cursor: 'pointer' }}
-                        >
-                          {activeBranchId === b.id ? 'Activa' : 'Activar'}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => switchBranch(b.id)}
+                            style={{ padding: '5px 12px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', background: activeBranchId === b.id ? '#f1f5f9' : 'var(--color-cyan)', color: activeBranchId === b.id ? '#64748b' : '#fff', border: 'none', cursor: 'pointer' }}
+                          >
+                            {activeBranchId === b.id ? 'Activa' : 'Activar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAssignUsersModal(b)}
+                            style={{ padding: '5px 8px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', cursor: 'pointer' }}
+                            title="Asignar usuarios a este local"
+                          >
+                            <Users size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1178,87 +1348,244 @@ export default function BranchesControl({ setActiveTab }) {
         </div>
       )}
 
-      {/* ── MODAL: REGISTRAR NUEVO USUARIO DE SEDE ── */}
+      {/* ── MODAL: REGISTRAR O VINCULAR USUARIO A SUCURSAL ── */}
       {showAddUserModal && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '480px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UserPlus size={18} style={{ color: 'var(--color-cyan)' }} />
-                Registrar Nuevo Usuario / Empleado
-              </h3>
+          <div className="modal-content glass-panel" style={{ maxWidth: '520px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <UserPlus size={18} style={{ color: 'var(--color-cyan)' }} />
+                  Gestión de Personal & Asignación
+                </h3>
+                <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                  Asigna un usuario ya existente a una sucursal o registra un nuevo empleado
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setShowAddUserModal(false)}>✕</button>
             </div>
 
+            {/* PESTAÑAS: VINCULAR EXISTENTE vs CREAR NUEVO */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: '#f1f5f9', padding: '4px', borderRadius: '12px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddUserModalTab('existing');
+                  if (!selectedExistingUserId && systemUsers.length > 0) {
+                    const first = systemUsers[0];
+                    setSelectedExistingUserId(first.id || first.email);
+                    setEditFormBranchId(first.branch_id || 'branch-matriz');
+                    setEditFormRole(first.role || 'Cajero');
+                    const allowed = first.allowed_branches || ['all'];
+                    const isAll = Array.isArray(allowed) ? allowed.includes('all') : true;
+                    setEditFormAccessAll(isAll);
+                    setEditFormSelectedBranches(Array.isArray(allowed) ? allowed : [first.branch_id || 'branch-matriz']);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  background: addUserModalTab === 'existing' ? '#ffffff' : 'transparent',
+                  color: addUserModalTab === 'existing' ? '#0284c7' : '#64748b',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: addUserModalTab === 'existing' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Users size={14} />
+                <span>Asignar Usuario Existente</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddUserModalTab('new')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  background: addUserModalTab === 'new' ? '#ffffff' : 'transparent',
+                  color: addUserModalTab === 'new' ? '#0284c7' : '#64748b',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: addUserModalTab === 'new' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <UserPlus size={14} />
+                <span>+ Crear Nuevo Usuario</span>
+              </button>
+            </div>
+
             <form onSubmit={handleCreateUserSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label className="form-label">Nombre Completo *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ej: Carlos Mendoza"
-                  value={newUserData.full_name}
-                  onChange={(e) => setNewUserData({ ...newUserData, full_name: e.target.value })}
-                  required
-                />
-              </div>
+              {addUserModalTab === 'existing' ? (
+                <>
+                  {/* SELECTOR DE USUARIO EXISTENTE */}
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+                      👤 Seleccionar Usuario / Administrador ya creado *
+                    </label>
+                    <select
+                      className="form-input"
+                      value={selectedExistingUserId}
+                      onChange={(e) => {
+                        const targetId = e.target.value;
+                        setSelectedExistingUserId(targetId);
+                        const found = systemUsers.find(u => (u.id || u.email) === targetId);
+                        if (found) {
+                          setEditFormBranchId(found.branch_id || 'branch-matriz');
+                          setEditFormRole(found.role || 'Cajero');
+                          const allowed = found.allowed_branches || ['all'];
+                          const isAll = Array.isArray(allowed) ? allowed.includes('all') : true;
+                          setEditFormAccessAll(isAll);
+                          setEditFormSelectedBranches(Array.isArray(allowed) ? allowed : [found.branch_id || 'branch-matriz']);
+                        }
+                      }}
+                      style={{ width: '100%', padding: '10px', fontSize: '13px', fontWeight: 800, borderRadius: '10px' }}
+                      required
+                    >
+                      {systemUsers.map(u => (
+                        <option key={u.id || u.email} value={u.id || u.email}>
+                          {u.full_name || u.name || 'Sin Nombre'} — {u.email} ({u.role || 'Cajero'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="form-label">Correo Electrónico *</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="carlos@empresa.com"
-                  value={newUserData.email}
-                  onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                  required
-                />
-              </div>
+                  {/* SUCURSAL PRINCIPAL */}
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <label className="form-label" style={{ fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+                      🏢 Asignar como Sucursal Personal / Predeterminada *
+                    </label>
+                    <select
+                      className="form-input"
+                      value={editFormBranchId}
+                      onChange={(e) => setEditFormBranchId(e.target.value)}
+                      style={{ width: '100%', padding: '9px', fontSize: '12.5px', fontWeight: 800, borderRadius: '10px' }}
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.is_main ? 'Casa Matriz' : (b.code || 'Sucursal')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="form-label">Contraseña Inicial</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="nexus123"
-                  value={newUserData.password}
-                  onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                />
-              </div>
+                  {/* ROL DEL USUARIO */}
+                  <div>
+                    <label className="form-label">Rol del Usuario</label>
+                    <select
+                      className="form-input"
+                      value={editFormRole}
+                      onChange={(e) => setEditFormRole(e.target.value)}
+                      style={{ width: '100%', padding: '9px', fontSize: '12.5px', borderRadius: '10px' }}
+                    >
+                      <option value="Administrador">Administrador (Control Total)</option>
+                      <option value="Gerente">Gerente de Sede</option>
+                      <option value="Cajero">Cajero / POS</option>
+                      <option value="Vendedor">Vendedor</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="form-label">Sucursal Personal / Principal *</label>
-                <select
-                  className="form-input"
-                  value={newUserData.branch_id}
-                  onChange={(e) => setNewUserData({ ...newUserData, branch_id: e.target.value })}
-                >
-                  {branches.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
+                  {/* ALCANCE DE ACCESOS */}
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <label className="form-label" style={{ fontWeight: 800, color: '#0f172a', marginBottom: '6px' }}>
+                      🌐 Alcance de Acceso Multi-Sede
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px', color: '#334155', fontWeight: 700 }}>
+                      <input
+                        type="checkbox"
+                        checked={editFormAccessAll}
+                        onChange={(e) => setEditFormAccessAll(e.target.checked)}
+                        style={{ width: '16px', height: '16px', accentColor: 'var(--color-cyan)' }}
+                      />
+                      <span>Dar acceso a TODAS las sucursales actuales y futuras</span>
+                    </label>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="form-label">Nombre Completo *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej: Carlos Mendoza"
+                      value={newUserData.full_name}
+                      onChange={(e) => setNewUserData({ ...newUserData, full_name: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="form-label">Rol del Usuario</label>
-                <select
-                  className="form-input"
-                  value={newUserData.role}
-                  onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
-                >
-                  <option value="Cajero">Cajero / POS</option>
-                  <option value="Vendedor">Vendedor</option>
-                  <option value="Gerente">Gerente de Sede</option>
-                  <option value="Administrador">Administrador</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="form-label">Correo Electrónico *</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="carlos@empresa.com"
+                      value={newUserData.email}
+                      onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label">Contraseña Inicial</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="nexus123"
+                      value={newUserData.password}
+                      onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label">Sucursal Personal / Principal *</label>
+                    <select
+                      className="form-input"
+                      value={newUserData.branch_id}
+                      onChange={(e) => setNewUserData({ ...newUserData, branch_id: e.target.value })}
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label">Rol del Usuario</label>
+                    <select
+                      className="form-input"
+                      value={newUserData.role}
+                      onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                    >
+                      <option value="Cajero">Cajero / POS</option>
+                      <option value="Vendedor">Vendedor</option>
+                      <option value="Gerente">Gerente de Sede</option>
+                      <option value="Administrador">Administrador</option>
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
                 <button type="button" className="btn-secondary" onClick={() => setShowAddUserModal(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn-primary">
-                  Registrar Usuario
+                  {addUserModalTab === 'existing' ? '💾 Guardar Asignación' : '+ Registrar Usuario'}
                 </button>
               </div>
             </form>
@@ -1266,15 +1593,20 @@ export default function BranchesControl({ setActiveTab }) {
         </div>
       )}
 
-      {/* ── MODAL: AGREGAR NUEVA SUCURSAL ── */}
+      {/* ── MODAL: AGREGAR NUEVA SUCURSAL & ASIGNAR PERSONAL INICIAL ── */}
       {showAddModal && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '480px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '520px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <PlusCircle size={18} style={{ color: 'var(--color-cyan)' }} />
-                Registrar Nueva Sucursal / Sede
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <PlusCircle size={18} style={{ color: 'var(--color-cyan)' }} />
+                  Registrar Nueva Sucursal / Sede
+                </h3>
+                <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                  Crea un nuevo local y asigna de inmediato el personal y administradores encargados
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
             </div>
 
@@ -1291,15 +1623,27 @@ export default function BranchesControl({ setActiveTab }) {
                 />
               </div>
 
-              <div>
-                <label className="form-label">Código / Identificador Sede</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ej: SUC-002, NORTE-01"
-                  value={newBranchData.code}
-                  onChange={(e) => setNewBranchData({ ...newBranchData, code: e.target.value })}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="form-label">Código / Identificador</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: SUC-02, NORTE-01"
+                    value={newBranchData.code}
+                    onChange={(e) => setNewBranchData({ ...newBranchData, code: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Teléfono de Contacto</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: +58 412 1234567"
+                    value={newBranchData.phone}
+                    onChange={(e) => setNewBranchData({ ...newBranchData, phone: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div>
@@ -1313,15 +1657,123 @@ export default function BranchesControl({ setActiveTab }) {
                 />
               </div>
 
-              <div>
-                <label className="form-label">Manager / Encargado de la Sucursal</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ej: Roberto Gómez"
-                  value={newBranchData.manager}
-                  onChange={(e) => setNewBranchData({ ...newBranchData, manager: e.target.value })}
-                />
+              {/* ENCARGADO / MANAGER: SELECTOR DE USUARIOS EXISTENTES */}
+              <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <User size={14} style={{ color: 'var(--color-cyan)' }} />
+                    Manager / Encargado de la Sucursal
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewBranchManagerMode(newBranchManagerMode === 'select' ? 'custom' : 'select')}
+                    style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '11px', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {newBranchManagerMode === 'select' ? '+ Escribir otro nombre' : 'Seleccionar de usuarios'}
+                  </button>
+                </div>
+
+                {newBranchManagerMode === 'select' ? (
+                  <select
+                    className="form-input"
+                    value={newBranchData.manager}
+                    onChange={(e) => setNewBranchData({ ...newBranchData, manager: e.target.value })}
+                    style={{ width: '100%', padding: '8px 10px', fontSize: '12.5px', fontWeight: 800, borderRadius: '8px' }}
+                  >
+                    <option value="">-- Seleccionar Encargado (Opcional) --</option>
+                    {systemUsers.map(u => (
+                      <option key={u.id || u.email} value={u.full_name || u.name || u.email}>
+                        {u.full_name || u.name} ({u.role || 'Cajero'}) — {u.email}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: Roberto Gómez"
+                    value={newBranchData.manager}
+                    onChange={(e) => setNewBranchData({ ...newBranchData, manager: e.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                )}
+              </div>
+
+              {/* ASIGNACIÓN DE USUARIOS / ADMINISTRADORES EXISTENTES A ESTA SUCURSAL */}
+              <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '14px', border: '1px solid #bae6fd' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ fontWeight: 900, color: '#0369a1', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={15} />
+                    👥 Asignar Personal & Administradores a este Local
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setNewBranchSelectedUsers(systemUsers.map(u => u.id || u.email))}
+                      style={{ background: '#ffffff', border: '1px solid #7dd3fc', color: '#0369a1', borderRadius: '6px', padding: '2px 6px', fontSize: '10.5px', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewBranchSelectedUsers([])}
+                      style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: '6px', padding: '2px 6px', fontSize: '10.5px', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      Ninguno
+                    </button>
+                  </div>
+                </div>
+                <p style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', marginBottom: '10px' }}>
+                  Marca los usuarios que tendrán acceso para operar y conmutar a este nuevo local:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {systemUsers.map(u => {
+                    const uId = u.id || u.email;
+                    const isChecked = newBranchSelectedUsers.includes(uId);
+                    return (
+                      <label
+                        key={uId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '7px 10px',
+                          borderRadius: '8px',
+                          background: isChecked ? '#e0f2fe' : '#ffffff',
+                          border: isChecked ? '1px solid #0284c7' : '1px solid #e2e8f0',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewBranchSelectedUsers(prev => [...prev, uId]);
+                              } else {
+                                setNewBranchSelectedUsers(prev => prev.filter(id => id !== uId));
+                              }
+                            }}
+                            style={{ width: '15px', height: '15px', accentColor: 'var(--color-cyan)' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
+                              {u.full_name || u.name || 'Usuario'}
+                            </div>
+                            <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                              {u.email}
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#dcfce7' : '#f1f5f9', color: ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase()) ? '#15803d' : '#475569' }}>
+                          {u.role || 'Cajero'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -1329,7 +1781,7 @@ export default function BranchesControl({ setActiveTab }) {
                   Cancelar
                 </button>
                 <button type="submit" className="btn-primary" disabled={creating}>
-                  {creating ? 'Guardando...' : '+ Crear Sucursal'}
+                  {creating ? 'Guardando...' : '+ Crear Sucursal y Asignar'}
                 </button>
               </div>
             </form>
@@ -1342,10 +1794,15 @@ export default function BranchesControl({ setActiveTab }) {
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
           <div className="modal-content glass-panel" style={{ maxWidth: '480px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Edit3 size={18} style={{ color: 'var(--color-cyan)' }} />
-                Renombrar & Editar Sede
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Edit3 size={18} style={{ color: 'var(--color-cyan)' }} />
+                  Renombrar & Editar Sede
+                </h3>
+                <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                  {editModalBranch.name} ({editModalBranch.isMain ? 'Casa Matriz' : (editModalBranch.code || 'Sede')})
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setEditModalBranch(null)}>✕</button>
             </div>
 
@@ -1399,15 +1856,41 @@ export default function BranchesControl({ setActiveTab }) {
                 />
               </div>
 
+              {/* MANAGER / ENCARGADO CON SELECTOR DE USUARIOS */}
               <div>
                 <label className="form-label">Manager / Encargado de la Sede</label>
-                <input
-                  type="text"
+                <select
                   className="form-input"
-                  placeholder="Ej: Roberto Gómez"
                   value={editModalBranch.manager || ''}
                   onChange={(e) => setEditModalBranch({ ...editModalBranch, manager: e.target.value })}
-                />
+                  style={{ width: '100%', padding: '9px', fontSize: '12.5px', fontWeight: 800, borderRadius: '10px' }}
+                >
+                  <option value="">-- Seleccionar Encargado (Opcional) --</option>
+                  {systemUsers.map(u => (
+                    <option key={u.id || u.email} value={u.full_name || u.name || u.email}>
+                      {u.full_name || u.name} ({u.role || 'Cajero'}) — {u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* BOTÓN DE ACCESO RÁPIDO PARA ASIGNAR USUARIOS */}
+              <div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '12px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 700 }}>
+                  👥 Personal Asignado a esta Sede
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const branchToAssign = { ...editModalBranch };
+                    setEditModalBranch(null);
+                    handleOpenAssignUsersModal(branchToAssign);
+                  }}
+                  style={{ background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <Users size={13} />
+                  <span>Gestionar Asignaciones</span>
+                </button>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -1419,6 +1902,262 @@ export default function BranchesControl({ setActiveTab }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ASIGNACIÓN MASIVA DE USUARIOS Y ADMINISTRADORES AL LOCAL ── */}
+      {assignUsersModalBranch && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '580px', padding: '24px', background: '#ffffff', borderRadius: '24px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(6,182,212,0.12)', color: 'var(--color-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                      Asignar Personal al Local
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 900, color: '#0284c7', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
+                        {assignUsersModalBranch.name}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                        ({assignUsersModalBranch.isMain ? 'Casa Matriz' : (assignUsersModalBranch.code || 'Sede')})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setAssignUsersModalBranch(null)}>✕</button>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 14px 0' }}>
+              Selecciona qué usuarios y administradores ya creados tienen acceso a este local y designa si es su sede principal de trabajo.
+            </p>
+
+            {/* BARRA DE BÚSQUEDA Y ACCIONES RÁPIDAS */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
+                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Filtrar por nombre, email o rol..."
+                  value={assignUsersSearchTerm}
+                  onChange={(e) => setAssignUsersSearchTerm(e.target.value)}
+                  style={{ paddingLeft: '32px', fontSize: '12px', borderRadius: '8px', width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignUsersState(prev => {
+                      const updated = { ...prev };
+                      systemUsers.forEach(u => {
+                        const idKey = u.id || u.email;
+                        updated[idKey] = { ...(updated[idKey] || {}), hasAccess: true };
+                      });
+                      return updated;
+                    });
+                  }}
+                  style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1', borderRadius: '8px', padding: '6px 10px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Dar Acceso a Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignUsersState(prev => {
+                      const updated = { ...prev };
+                      systemUsers.forEach(u => {
+                        const idKey = u.id || u.email;
+                        updated[idKey] = { ...(updated[idKey] || {}), hasAccess: false, isPrimary: false };
+                      });
+                      return updated;
+                    });
+                  }}
+                  style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: '8px', padding: '6px 10px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Quitar Todos
+                </button>
+              </div>
+            </div>
+
+            {/* LISTA DE USUARIOS CON CONTROLES DE ASIGNACIÓN */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px', marginBottom: '14px' }}>
+              {systemUsers
+                .filter(u => {
+                  if (!assignUsersSearchTerm) return true;
+                  const term = assignUsersSearchTerm.toLowerCase();
+                  return (
+                    (u.full_name || u.name || '').toLowerCase().includes(term) ||
+                    (u.email || '').toLowerCase().includes(term) ||
+                    (u.role || '').toLowerCase().includes(term)
+                  );
+                })
+                .map(u => {
+                  const idKey = u.id || u.email;
+                  const state = assignUsersState[idKey] || { isPrimary: false, hasAccess: false };
+                  const isOwnerOrAdmin = ['admin', 'administrador', 'owner', 'nexusowner'].includes((u.role || '').toLowerCase());
+
+                  return (
+                    <div
+                      key={idKey}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '12px',
+                        background: state.hasAccess ? '#f0f9ff' : '#f8fafc',
+                        border: state.hasAccess ? '1.5px solid #7dd3fc' : '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: isOwnerOrAdmin ? '#dcfce7' : 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(99,102,241,0.15))',
+                          color: isOwnerOrAdmin ? '#15803d' : 'var(--color-cyan)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 900,
+                          fontSize: '13px',
+                          flexShrink: 0
+                        }}>
+                          {(u.full_name || u.name || u.email || 'U').charAt(0).toUpperCase()}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px' }}>
+                              {u.full_name || u.name || 'Sin Nombre'}
+                            </span>
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: isOwnerOrAdmin ? '#dcfce7' : '#e0f2fe',
+                              color: isOwnerOrAdmin ? '#15803d' : '#0369a1'
+                            }}>
+                              {u.role || 'Cajero'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.email}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CONTROLES DE ASIGNACIÓN */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                        {/* Opción 1: Sede Principal */}
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            color: state.isPrimary ? '#0284c7' : '#64748b',
+                            cursor: 'pointer',
+                            background: state.isPrimary ? '#ffffff' : 'transparent',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            border: state.isPrimary ? '1px solid #7dd3fc' : '1px solid transparent'
+                          }}
+                          title="Establecer como la sede de inicio de sesión predeterminada"
+                        >
+                          <input
+                            type="radio"
+                            name={`primary-branch-${idKey}`}
+                            checked={state.isPrimary}
+                            onChange={() => {
+                              setAssignUsersState(prev => ({
+                                ...prev,
+                                [idKey]: {
+                                  ...prev[idKey],
+                                  isPrimary: true,
+                                  hasAccess: true
+                                }
+                              }));
+                            }}
+                            style={{ accentColor: 'var(--color-cyan)' }}
+                          />
+                          <span>Sede Principal</span>
+                        </label>
+
+                        {/* Opción 2: Acceso Permitido */}
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '12px',
+                            fontWeight: 900,
+                            color: state.hasAccess ? '#0369a1' : '#64748b',
+                            cursor: 'pointer',
+                            background: state.hasAccess ? '#e0f2fe' : '#f1f5f9',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            border: state.hasAccess ? '1px solid #7dd3fc' : '1px solid #cbd5e1'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={state.hasAccess}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setAssignUsersState(prev => ({
+                                ...prev,
+                                [idKey]: {
+                                  ...prev[idKey],
+                                  hasAccess: checked,
+                                  isPrimary: checked ? prev[idKey]?.isPrimary : false
+                                }
+                              }));
+                            }}
+                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-cyan)' }}
+                          />
+                          <span>{state.hasAccess ? '✓ Acceso Autorizado' : 'Sin Acceso'}</span>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* BOTONES ACCIÓN */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setAssignUsersModalBranch(null)}
+                style={{ padding: '9px 16px', fontSize: '12px', fontWeight: 800 }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveAssignUsersSubmit}
+                disabled={savingAssignUsers}
+                style={{ padding: '9px 20px', fontSize: '12.5px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <ShieldCheck size={16} />
+                <span>{savingAssignUsers ? 'Guardando Asignaciones...' : '💾 Guardar Asignaciones del Local'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
