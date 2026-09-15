@@ -6,7 +6,7 @@ import SalesHistory from './SalesHistory';
 import { DollarSign, AlertTriangle, TrendingUp, ShoppingBag, ArrowRight, Receipt, CreditCard, PieChart, LayoutDashboard, History } from 'lucide-react';
 
 export default function Dashboard({ setActiveTab, initialSubTab = 'overview' }) {
-  const { sales, inventory, lowStockItems, lowStockCount, formatCurrency } = usePuntoNexus();
+  const { sales, inventory, lowStockItems, lowStockCount, formatCurrency, companySettings } = usePuntoNexus();
   const [subTab, setSubTab] = useState(initialSubTab);
 
   // Filtrar solo ventas válidas (excluir anuladas)
@@ -260,7 +260,7 @@ export default function Dashboard({ setActiveTab, initialSubTab = 'overview' }) 
                     <span style={{ fontSize: '11.5px', fontWeight: 700 }}>{item.name}</span>
                     <div style={{ display: 'flex', gap: '10px', marginTop: '2px', fontSize: '10.5px' }}>
                       <span style={{ color: 'var(--color-rose)', fontWeight: 650 }}>Stock actual: {item.stock}</span>
-                      <span style={{ color: 'var(--text-muted)' }}>Mínimo: {item.min_stock}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>Mínimo: {item.min_stock ?? (companySettings?.default_min_stock || 5)}</span>
                     </div>
                   </div>
                   <button

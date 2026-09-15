@@ -15,6 +15,7 @@ export default function Inventory() {
     loading,
     companySettings,
     updateCompanySettings,
+    updateMinStockBatch,
     formatCurrency,
     syncExchangeRate,
     resetToRestaurantCatalog,
@@ -354,6 +355,19 @@ export default function Inventory() {
   const [marginApplying, setMarginApplying] = useState(false);
   const [marginPreview, setMarginPreview] = useState(false);
 
+  // STOCK MÍNIMO: CONFIGURACIÓN GENERAL E INDIVIDUAL
+  const defaultMinStock = (companySettings?.default_min_stock !== undefined && companySettings?.default_min_stock !== null && !isNaN(Number(companySettings.default_min_stock)))
+    ? Number(companySettings.default_min_stock)
+    : 5;
+
+  const [showMinStockModal, setShowMinStockModal] = useState(false);
+  const [globalMinStockInput, setGlobalMinStockInput] = useState(String(defaultMinStock));
+  const [savingGlobalMinStock, setSavingGlobalMinStock] = useState(false);
+
+  const [quickMinStockProduct, setQuickMinStockProduct] = useState(null);
+  const [quickMinStockInput, setQuickMinStockInput] = useState('');
+  const [savingQuickMinStock, setSavingQuickMinStock] = useState(false);
+
   const toggleSelectAll = () => {
     if (selectedProductIds.size === filteredProducts.length) {
       setSelectedProductIds(new Set());
@@ -390,7 +404,7 @@ export default function Inventory() {
     dimensions: '',
     materials: '',
     owner_notes: '',
-    min_stock: '5',
+    min_stock: String(defaultMinStock),
     payment_type: 'contado', // 'contado' | 'cuenta_por_pagar'
     supplier: '',
     expiration_days: '10',
@@ -599,14 +613,15 @@ export default function Inventory() {
   };
 
   const lowStockProductsCount = useMemo(() => {
-    return inventory.filter(p => p.stock !== 999 && !p.sku?.startsWith('SERV-') && (p.stock <= (p.min_stock ?? 5))).length;
-  }, [inventory]);
+    return inventory.filter(p => p.stock !== 999 && !p.sku?.startsWith('SERV-') && (p.stock <= (p.min_stock !== undefined && p.min_stock !== null && !isNaN(Number(p.min_stock)) ? Number(p.min_stock) : defaultMinStock))).length;
+  }, [inventory, defaultMinStock]);
 
   // Filtrar productos
   const filteredProducts = useMemo(() => {
     return inventory.filter(p => {
       const isService = p.stock === 999 || p.sku?.startsWith('SERV-');
-      const isLowStock = !isService && (p.stock <= (p.min_stock ?? 5));
+      const prodMin = (p.min_stock !== undefined && p.min_stock !== null && !isNaN(Number(p.min_stock))) ? Number(p.min_stock) : defaultMinStock;
+      const isLowStock = !isService && (p.stock <= prodMin);
 
       if (activeStockFilter === 'low_stock' && !isLowStock) {
         return false;
@@ -616,7 +631,17 @@ export default function Inventory() {
       if (!q) return true;
       return p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.category && p.category.toLowerCase().includes(q));
     });
-  }, [inventory, search, activeStockFilter]);
+  }, [inventory, search, activeStockFilter, defaultMinStock]);
+
+  // Simulación en tiempo real para el modal de stock mínimo
+  const simulatedLowStockCount = useMemo(() => {
+    const inputThreshold = Math.max(0, Math.floor(Number(globalMinStockInput) || 0));
+    return (inventory || []).filter(p => {
+      const isService = p.stock === 999 || p.sku?.startsWith('SERV-');
+      if (isService) return false;
+      return p.stock <= inputThreshold;
+    }).length;
+  }, [inventory, globalMinStockInput]);
 
   // Alertas de cuentas por pagar a proveedores
   const accountsPayableAlerts = useMemo(() => {
@@ -723,6 +748,72 @@ export default function Inventory() {
     }
   };
 
+  // --- MANEJADORES DE STOCK MÍNIMO GENERAL E INDIVIDUAL ---
+
+  // Guardar stock mínimo predeterminado de la empresa
+  const handleSaveDefaultMinStock = async () => {
+    const val = Math.max(0, Math.floor(Number(globalMinStockInput) || 0));
+    setSavingGlobalMinStock(true);
+    try {
+      await updateCompanySettings({ default_min_stock: val });
+      alert(`¡Stock mínimo predeterminado guardado en ${val} unidades para toda la tienda!`);
+    } catch (e) {
+      alert("Error al guardar: " + (e.message || e));
+    } finally {
+      setSavingGlobalMinStock(false);
+    }
+  };
+
+  // Aplicar stock mínimo masivamente a todos o a seleccionados
+  const handleApplyMinStockToTargets = async (targetIds = null) => {
+    const val = Math.max(0, Math.floor(Number(globalMinStockInput) || 0));
+    const isSelection = Array.isArray(targetIds) && targetIds.length > 0;
+    const targetCount = isSelection ? targetIds.length : inventory.length;
+    const scopeLabel = isSelection ? `${targetCount} producto(s) seleccionado(s)` : `TODO el inventario (${targetCount} productos)`;
+
+    if (!window.confirm(`¿Confirmas aplicar un stock mínimo de ${val} unidades a ${scopeLabel}?`)) {
+      return;
+    }
+
+    setSavingGlobalMinStock(true);
+    try {
+      await updateMinStockBatch(val, targetIds);
+      if (!isSelection) {
+        await updateCompanySettings({ default_min_stock: val });
+      }
+      alert(`¡Éxito! Se actualizó el stock mínimo a ${val} unidades en ${targetCount} producto(s).`);
+      setShowMinStockModal(false);
+    } catch (e) {
+      alert("Error al aplicar stock mínimo masivo: " + (e.message || e));
+    } finally {
+      setSavingGlobalMinStock(false);
+    }
+  };
+
+  // Edición rápida individual
+  const handleOpenQuickMinStock = (product) => {
+    setQuickMinStockProduct(product);
+    const currentVal = (product.min_stock !== undefined && product.min_stock !== null && !isNaN(Number(product.min_stock)))
+      ? Number(product.min_stock)
+      : defaultMinStock;
+    setQuickMinStockInput(String(currentVal));
+  };
+
+  const handleSaveQuickMinStock = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!quickMinStockProduct) return;
+    const val = Math.max(0, Math.floor(Number(quickMinStockInput) || 0));
+    setSavingQuickMinStock(true);
+    try {
+      await updateProduct(quickMinStockProduct.id, { min_stock: val });
+      setQuickMinStockProduct(null);
+    } catch (e) {
+      alert("Error al actualizar producto: " + (e.message || e));
+    } finally {
+      setSavingQuickMinStock(false);
+    }
+  };
+
   // Abrir Modal de Creación
   const handleOpenAdd = () => {
     setEditingProduct(null);
@@ -745,7 +836,7 @@ export default function Inventory() {
       dimensions: '',
       materials: '',
       owner_notes: '',
-      min_stock: '5',
+      min_stock: String(defaultMinStock),
       payment_type: 'contado',
       supplier: '',
       expiration_days: '30',
@@ -807,7 +898,7 @@ export default function Inventory() {
       dimensions: specs.dimensions || '',
       materials: specs.materials || '',
       owner_notes: specs.owner_notes || '',
-      min_stock: String(product.min_stock !== undefined && product.min_stock !== null && String(product.min_stock).trim() !== '' ? product.min_stock : 5),
+      min_stock: String(product.min_stock !== undefined && product.min_stock !== null && String(product.min_stock).trim() !== '' ? product.min_stock : defaultMinStock),
       payment_type: product.payment_type || 'contado',
       supplier: product.supplier || '',
       expiration_days: String(product.expiration_days || 10),
@@ -838,7 +929,7 @@ export default function Inventory() {
 
     const minStockVal = (productForm.min_stock !== undefined && productForm.min_stock !== null && String(productForm.min_stock).trim() !== '' && !isNaN(Number(productForm.min_stock)))
       ? Math.max(0, Math.floor(Number(productForm.min_stock)))
-      : 5;
+      : defaultMinStock;
 
     let currentImages = Array.isArray(productForm.images) ? [...productForm.images] : [];
     if (urlImageInput && urlImageInput.trim() && !currentImages.includes(urlImageInput.trim())) {
@@ -1086,6 +1177,29 @@ export default function Inventory() {
           >
             <Upload size={15} />
             <span>Subir Excel</span>
+          </button>
+
+          {/* Configuración de Stock Mínimo General y Masivo */}
+          <button 
+            type="button" 
+            onClick={() => {
+              setGlobalMinStockInput(String(defaultMinStock));
+              setShowMinStockModal(true);
+            }}
+            className="btn-secondary"
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              background: 'rgba(245, 158, 11, 0.12)', 
+              borderColor: 'rgba(245, 158, 11, 0.35)', 
+              color: '#d97706', 
+              fontWeight: 800 
+            }}
+            title="Configurar stock mínimo general para la tienda o aplicarlo masivamente a productos"
+          >
+            <ShieldAlert size={15} />
+            <span>Stock Mínimo ({defaultMinStock} uds)</span>
           </button>
 
           {companySettings?.business_type === 'alimentos' && (
@@ -1391,7 +1505,11 @@ export default function Inventory() {
               ) : (
                 filteredProducts.map((product, index) => {
                   const isService = product.sku?.startsWith('SERV-') || product.stock === 999;
-                  const isLowStock = !isService && product.stock <= product.min_stock;
+                  const prodMinStock = (product.min_stock !== undefined && product.min_stock !== null && !isNaN(Number(product.min_stock)))
+                    ? Number(product.min_stock)
+                    : defaultMinStock;
+                  const hasCustomMinStock = product.min_stock !== undefined && product.min_stock !== null && Number(product.min_stock) !== defaultMinStock;
+                  const isLowStock = !isService && product.stock <= prodMinStock;
                   const isOutOfStock = !isService && product.stock <= 0;
                   const isSelected = selectedProductIds.has(product.id);
                   
@@ -1454,7 +1572,7 @@ export default function Inventory() {
                                 gap: '4px'
                               }}>
                                 <ShieldAlert size={10} />
-                                {isOutOfStock ? 'Sin stock disponible' : `Stock crítico (Mínimo: ${product.min_stock})`}
+                                {isOutOfStock ? 'Sin stock disponible' : `Stock crítico (Mínimo: ${prodMinStock})`}
                               </span>
                             )}
                             {(() => {
@@ -1507,6 +1625,35 @@ export default function Inventory() {
                         }`} style={{ background: 'transparent', border: '1px solid currentColor' }}>
                           {isService ? 'Servicio' : product.stock}
                         </span>
+                        {!isService && (
+                          <div style={{ marginTop: '4px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenQuickMinStock(product);
+                              }}
+                              title={`Stock mínimo individual: ${prodMinStock} uds (${hasCustomMinStock ? 'Personalizado' : 'General'}). Clic para modificar.`}
+                              style={{
+                                fontSize: '10px',
+                                padding: '1px 6px',
+                                borderRadius: '5px',
+                                background: hasCustomMinStock ? 'rgba(59, 130, 246, 0.12)' : '#f8fafc',
+                                color: hasCustomMinStock ? '#2563eb' : '#64748b',
+                                border: hasCustomMinStock ? '1px solid #bfdbfe' : '1px solid #e2e8f0',
+                                cursor: 'pointer',
+                                fontWeight: 750,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>Mín: {prodMinStock}</span>
+                              <Edit3 size={8} style={{ opacity: 0.8 }} />
+                            </button>
+                          </div>
+                        )}
                         {(() => {
                           const variants = getProductVariants(product);
                           if (variants.length === 0) return null;
@@ -2407,17 +2554,41 @@ export default function Inventory() {
                   </div>
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                      Stock Mínimo (Alerta)
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label className="form-label" style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: 0 }}>
+                        Stock Mínimo (Alerta)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setProductForm(prev => ({ ...prev, min_stock: String(defaultMinStock) }))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#2563eb',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          padding: 0,
+                          textDecoration: 'underline'
+                        }}
+                        title={`Restablecer al stock mínimo general de la tienda (${defaultMinStock})`}
+                      >
+                        Usar general ({defaultMinStock})
+                      </button>
+                    </div>
                     <input
                       type="number"
                       className="form-input"
-                      placeholder="5"
+                      placeholder={String(defaultMinStock)}
                       value={productForm.min_stock}
                       onChange={(e) => setProductForm({ ...productForm, min_stock: e.target.value })}
                       style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a' }}
                     />
+                    <span style={{ fontSize: '10px', color: Number(productForm.min_stock) === defaultMinStock ? '#16a34a' : '#2563eb', fontWeight: 650, marginTop: '3px', display: 'block' }}>
+                      {Number(productForm.min_stock) === defaultMinStock
+                        ? `✓ Usa el predeterminado general (${defaultMinStock} uds)`
+                        : `⚡ Personalizado individualmente para este producto`}
+                    </span>
                   </div>
                 </div>
 
@@ -2826,6 +2997,267 @@ export default function Inventory() {
                 </button>
                 <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, var(--color-amber), #d97706)', boxShadow: '0 4px 14px rgba(245, 158, 11, 0.3)' }} disabled={loading}>
                   {loading ? 'Sincronizando...' : 'Confirmar Compra'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURACIÓN STOCK MÍNIMO GENERAL Y MASIVO */}
+      {showMinStockModal && (
+        <div className="modal-overlay" style={{ zIndex: 1050 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '560px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', background: '#ffffff', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.22)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#ffffff', padding: '9px', borderRadius: '12px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}>
+                  <ShieldAlert size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>Configuración de Stock Mínimo</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Define umbrales preventivos generales o aplica en lote a tu inventario
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowMinStockModal(false)} 
+                className="modal-close"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Sección 1: Valor General de la Tienda */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                  Stock Mínimo General (Predeterminado)
+                </label>
+                <span style={{ fontSize: '11px', fontWeight: 750, color: '#ca8a04', background: '#fef9c3', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fef08a' }}>
+                  Actual: {defaultMinStock} uds
+                </span>
+              </div>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                Este valor se asignará automáticamente a cualquier producto nuevo que agregues o importes, y servirá como base de alerta si un producto no tiene configuración individual.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '130px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={globalMinStockInput}
+                    onChange={(e) => setGlobalMinStockInput(e.target.value)}
+                    className="form-input"
+                    style={{ width: '100%', paddingRight: '42px', fontWeight: 800, fontSize: '15px', color: '#0f172a' }}
+                  />
+                  <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>
+                    uds
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={savingGlobalMinStock}
+                  onClick={handleSaveDefaultMinStock}
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '12.5px', fontWeight: 800, whiteSpace: 'nowrap' }}
+                >
+                  {savingGlobalMinStock ? 'Guardando...' : 'Guardar Predeterminado'}
+                </button>
+              </div>
+            </div>
+
+            {/* Simulación en tiempo real */}
+            <div style={{
+              background: simulatedLowStockCount > 0 ? '#fffbeb' : '#f0fdf4',
+              border: simulatedLowStockCount > 0 ? '1px solid #fde68a' : '1px solid #bbf7d0',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              marginBottom: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              {simulatedLowStockCount > 0 ? (
+                <AlertTriangle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
+              ) : (
+                <CheckCircle2 size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
+              )}
+              <div style={{ fontSize: '12px', color: simulatedLowStockCount > 0 ? '#92400e' : '#166534', lineHeight: 1.4 }}>
+                Con un stock mínimo de <strong>{Math.max(0, Math.floor(Number(globalMinStockInput) || 0))} unidades</strong>, tendrías actualmente <strong>{simulatedLowStockCount} productos</strong> en alerta de reposición.
+              </div>
+            </div>
+
+            {/* Sección 2: Aplicación en Lote / Masiva */}
+            <div style={{ background: '#ffffff', padding: '16px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <Sparkles size={16} style={{ color: '#8b5cf6' }} />
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                  Aplicar en Masa a Productos Existentes
+                </h4>
+              </div>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 14px 0', lineHeight: 1.4 }}>
+                Actualiza masivamente el stock mínimo de tus productos en un solo clic para no tener que modificarlos uno por uno.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {selectedProductIds.size > 0 && (
+                  <button
+                    type="button"
+                    disabled={savingGlobalMinStock}
+                    onClick={() => handleApplyMinStockToTargets(Array.from(selectedProductIds))}
+                    className="btn-secondary"
+                    style={{
+                      background: 'rgba(139, 92, 246, 0.08)',
+                      borderColor: '#a78bfa',
+                      color: '#7c3aed',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '10px 14px'
+                    }}
+                  >
+                    <Check size={16} />
+                    <span>Aplicar {Math.max(0, Math.floor(Number(globalMinStockInput) || 0))} uds a los {selectedProductIds.size} seleccionados</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={savingGlobalMinStock}
+                  onClick={() => handleApplyMinStockToTargets(null)}
+                  className="btn-primary"
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    fontWeight: 800,
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.25)'
+                  }}
+                >
+                  <RefreshCw size={15} className={savingGlobalMinStock ? 'spin' : ''} />
+                  <span>Aplicar {Math.max(0, Math.floor(Number(globalMinStockInput) || 0))} uds a TODO el inventario ({inventory.length} productos)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Recordatorio de configuración individual */}
+            <div style={{ padding: '12px 14px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', fontSize: '11.5px', color: '#1e40af', display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.4 }}>
+              <span style={{ fontSize: '14px', flexShrink: 0 }}>💡</span>
+              <div>
+                <strong>¿Necesitas reglas individuales?</strong> También puedes personalizar el stock mínimo de cualquier producto de manera independiente haciendo clic en su etiqueta <code>Mín</code> en la columna de stock de la tabla o abriendo su modal de edición.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+              <button
+                type="button"
+                onClick={() => setShowMinStockModal(false)}
+                className="btn-secondary"
+                style={{ padding: '8px 18px', fontSize: '12.5px', fontWeight: 700 }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MINI-MODAL DE EDICIÓN RÁPIDA DE STOCK MÍNIMO INDIVIDUAL */}
+      {quickMinStockProduct && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '420px', width: '100%', padding: '24px', background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
+                  <ShieldAlert size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Stock Mínimo Individual</h3>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Ajusta la alerta para este producto</span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setQuickMinStockProduct(null)} 
+                className="modal-close"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {quickMinStockProduct.name}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', gap: '8px' }}>
+                <span>SKU: {quickMinStockProduct.sku || 'S/N'}</span>
+                <span>•</span>
+                <span>Stock Actual: <strong>{quickMinStockProduct.stock} uds</strong></span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveQuickMinStock}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
+                  Stock Mínimo de Alerta (Unidades)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    autoFocus
+                    required
+                    value={quickMinStockInput}
+                    onChange={(e) => setQuickMinStockInput(e.target.value)}
+                    className="form-input"
+                    style={{ flex: 1, fontWeight: 800, fontSize: '15px', padding: '8px 12px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQuickMinStockInput(String(defaultMinStock))}
+                    className="btn-secondary"
+                    style={{ fontSize: '11px', padding: '6px 10px', whiteSpace: 'nowrap', background: '#f1f5f9', borderColor: '#cbd5e1' }}
+                    title={`Usar valor general predeterminado (${defaultMinStock})`}
+                  >
+                    General ({defaultMinStock})
+                  </button>
+                </div>
+                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', display: 'block' }}>
+                  {Number(quickMinStockInput) === defaultMinStock 
+                    ? `✓ Usa el valor predeterminado general de la tienda (${defaultMinStock} uds).`
+                    : `⚡ Valor personalizado exclusivamente para este producto.`}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setQuickMinStockProduct(null)}
+                  className="btn-secondary"
+                  style={{ padding: '8px 14px', fontSize: '12px' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingQuickMinStock}
+                  className="btn-primary"
+                  style={{ padding: '8px 18px', fontSize: '12px', fontWeight: 800 }}
+                >
+                  {savingQuickMinStock ? 'Guardando...' : 'Guardar Stock Mínimo'}
                 </button>
               </div>
             </form>

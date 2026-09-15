@@ -1489,7 +1489,7 @@ export const PuntoNexusProvider = ({ children }) => {
 
     const minStockVal = (prod.min_stock !== undefined && prod.min_stock !== null && prod.min_stock !== '' && !isNaN(Number(prod.min_stock)))
       ? Math.max(0, Math.floor(Number(prod.min_stock)))
-      : 5;
+      : (Number(companySettings?.default_min_stock) || 5);
 
     const parsedSpecs = parseProductSpecs(prod);
     const allImages = Array.isArray(prod.images) && prod.images.length > 0 ? prod.images : (parsedSpecs.images || []);
@@ -2012,7 +2012,8 @@ export const PuntoNexusProvider = ({ children }) => {
           ...(newSettings.accent_color !== undefined ? { accent_color: newSettings.accent_color } : {}),
           ...(newSettings.price_color !== undefined ? { price_color: newSettings.price_color } : {}),
           ...(newSettings.button_color !== undefined ? { button_color: newSettings.button_color } : {}),
-          ...(newSettings.cancellation_password !== undefined ? { cancellation_password: newSettings.cancellation_password } : {})
+          ...(newSettings.cancellation_password !== undefined ? { cancellation_password: newSettings.cancellation_password } : {}),
+          ...(newSettings.default_min_stock !== undefined ? { default_min_stock: Math.max(0, Math.floor(Number(newSettings.default_min_stock) || 0)) } : {})
         };
 
         dbUpdates.user_modules = updatedCustomMeta;
@@ -3003,6 +3004,63 @@ export const PuntoNexusProvider = ({ children }) => {
       }
     }
     return { error: null };
+  };
+
+  // ACTUALIZAR STOCK MÍNIMO MASIVAMENTE O GENERAL
+  const updateMinStockBatch = async (newMinStock, targetProductIds = null) => {
+    const val = Math.max(0, Math.floor(Number(newMinStock) || 0));
+    const isMock = !isUUID(companyId);
+
+    // 1. Actualizar estado local inmediatamente
+    const targetSet = (Array.isArray(targetProductIds) && targetProductIds.length > 0) ? new Set(targetProductIds) : null;
+    const updatedInv = (inventory || []).map(p => {
+      const matches = !targetSet || targetSet.has(p.id) || (p.sku && targetSet.has(p.sku));
+      if (matches) {
+        return { ...p, min_stock: val };
+      }
+      return p;
+    });
+
+    persistLocalInventory(updatedInv);
+
+    // 2. Persistir en Supabase si aplica
+    if (!isMock && companyId) {
+      setLoading(true);
+      try {
+        if (targetSet) {
+          const validUuids = Array.from(targetSet).filter(id => isUUID(id));
+          if (validUuids.length > 0) {
+            await supabase
+              .from('punto_nexus_inventory')
+              .update({ min_stock: val, updated_at: new Date().toISOString() })
+              .in('id', validUuids);
+          }
+          const nonUuids = Array.from(targetSet).filter(id => !isUUID(id));
+          for (const rawId of nonUuids) {
+            const p = (inventory || []).find(item => item.id === rawId || item.sku === rawId);
+            if (p?.sku) {
+              await supabase
+                .from('punto_nexus_inventory')
+                .update({ min_stock: val, updated_at: new Date().toISOString() })
+                .eq('company_id', companyId)
+                .eq('sku', p.sku);
+            }
+          }
+        } else {
+          // Todo el inventario de la empresa
+          await supabase
+            .from('punto_nexus_inventory')
+            .update({ min_stock: val, updated_at: new Date().toISOString() })
+            .eq('company_id', companyId);
+        }
+      } catch (err) {
+        console.warn("[Nexus DB] Excepción al actualizar min_stock en lote en Supabase:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    return { error: null, count: targetSet ? targetSet.size : (inventory || []).length };
   };
 
   const applyCartDeductionsToInventory = (currentInventory, itemsInCart) => {
@@ -4856,12 +4914,18 @@ export const PuntoNexusProvider = ({ children }) => {
 
   // Alertas de stock crítico aisladas únicamente para la sucursal activa
   const lowStockItems = useMemo(() => {
+    const defaultMin = (companySettings?.default_min_stock !== undefined && companySettings?.default_min_stock !== null)
+      ? Number(companySettings.default_min_stock)
+      : 5;
     return (activeBranchInventory || []).filter(item => {
       const isService = item.sku?.startsWith('SERV-') || item.stock === 999;
       if (isService) return false;
-      return item.stock <= item.min_stock;
+      const threshold = (item.min_stock !== undefined && item.min_stock !== null && !isNaN(Number(item.min_stock)))
+        ? Number(item.min_stock)
+        : defaultMin;
+      return item.stock <= threshold;
     });
-  }, [activeBranchInventory]);
+  }, [activeBranchInventory, companySettings?.default_min_stock]);
 
   const lowStockCount = lowStockItems.length;
 
@@ -4908,6 +4972,7 @@ export const PuntoNexusProvider = ({ children }) => {
     logout,
     addProduct,
     updateProduct,
+    updateMinStockBatch,
     deleteProduct,
     replenishProduct,
     persistLocalInventory,

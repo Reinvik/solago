@@ -1777,7 +1777,10 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
           <div className={`pos-products-grid ${viewDensity}`}>
             {filteredProducts.map((product, idx) => {
               const isService = product.sku?.startsWith('SERV-') || product.stock === 999;
-              const isLowStock = !isService && product.stock <= product.min_stock;
+              const prodMinStock = (product.min_stock !== undefined && product.min_stock !== null && !isNaN(Number(product.min_stock)))
+                ? Number(product.min_stock)
+                : (Number(companySettings?.default_min_stock) || 5);
+              const isLowStock = !isService && product.stock <= prodMinStock;
               const isOutOfStock = !isService && product.stock <= 0;
               const isJustAdded = addedProdId === product.id;
               const imageUrl = getProductImage(product, companySettings?.business_type === 'gastronomia');
