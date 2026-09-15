@@ -1088,7 +1088,7 @@ export default function Inventory() {
             <span>Subir Excel</span>
           </button>
 
-          {companySettings?.business_type === 'alimentos' ? (
+          {companySettings?.business_type === 'alimentos' && (
             <button 
               type="button" 
               onClick={async () => {
@@ -1104,7 +1104,9 @@ export default function Inventory() {
               <ShoppingCart size={15} />
               <span>🛒 Cargar Catálogo Base Minimarket</span>
             </button>
-          ) : (
+          )}
+
+          {companySettings?.business_type === 'gastronomia' && (
             <button 
               type="button" 
               onClick={async () => {
