@@ -44,7 +44,19 @@ import {
   Globe,
   Truck,
   Store,
-  Palette
+  Palette,
+  Inbox,
+  Clock,
+  CreditCard,
+  DollarSign,
+  AlertTriangle,
+  RefreshCw,
+  User,
+  Phone,
+  MapPin,
+  FileText,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, hasProductVariants, getVariantStock, normalizeVariants, unwrapDescription } from '../utils/productSpecs';
 import { formatShowcaseWhatsAppOrder, getOrderWhatsAppUrl } from '../utils/whatsappOrder';
@@ -65,7 +77,13 @@ export default function Showcase({ isPublicView = false }) {
     branches,
     activeBranchId,
     activeBranch,
-    switchBranch
+    switchBranch,
+    webOrders = [],
+    webOrdersLoading = false,
+    fetchWebOrders,
+    createWebOrder,
+    confirmWebOrder,
+    cancelWebOrder
   } = usePuntoNexus();
 
   // Giro Comercial y modalidades adaptativas
@@ -124,6 +142,88 @@ export default function Showcase({ isPublicView = false }) {
     navigator.clipboard.writeText(msgText);
     setCopiedOrderMsg(true);
     setTimeout(() => setCopiedOrderMsg(false), 2500);
+  };
+
+  // ── BANDEJA DE PEDIDOS WEB / QR (ADMINISTRACIÓN) ──
+  const pendingOrdersCount = useMemo(() => {
+    return (webOrders || []).filter(o => o.status === 'pending').length;
+  }, [webOrders]);
+
+  const [adminTab, setAdminTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`punto_nexus_web_orders_${companySettings?.company_id || 'default'}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.some(o => o.status === 'pending')) return 'orders';
+      }
+    } catch (e) {}
+    return 'orders';
+  });
+
+  const [orderFilter, setOrderFilter] = useState('pending'); // 'all' | 'pending' | 'confirmed' | 'cancelled'
+  const [orderSearch, setOrderSearch] = useState('');
+  const [confirmingOrder, setConfirmingOrder] = useState(null);
+  const [confirmPaymentMethod, setConfirmPaymentMethod] = useState('Pago Móvil');
+  const [confirmDocType, setConfirmDocType] = useState('Boleta');
+  const [confirmReference, setConfirmReference] = useState('');
+  const [isConfirmingSubmitting, setIsConfirmingSubmitting] = useState(false);
+  const [orderSuccessToast, setOrderSuccessToast] = useState('');
+
+  const filteredOrders = useMemo(() => {
+    return (webOrders || []).filter(order => {
+      if (orderFilter !== 'all' && order.status !== orderFilter) {
+        return false;
+      }
+      if (orderSearch.trim()) {
+        const q = orderSearch.toLowerCase();
+        const ticketMatch = String(order.ticket_code || order.id || '').toLowerCase().includes(q);
+        const nameMatch = String(order.customer_name || '').toLowerCase().includes(q);
+        const phoneMatch = String(order.customer_phone || '').toLowerCase().includes(q);
+        return ticketMatch || nameMatch || phoneMatch;
+      }
+      return true;
+    });
+  }, [webOrders, orderFilter, orderSearch]);
+
+  const handleExecuteConfirmOrder = async () => {
+    if (!confirmingOrder) return;
+    setIsConfirmingSubmitting(true);
+
+    try {
+      const res = await confirmWebOrder(confirmingOrder.id, {
+        paymentMethod: confirmPaymentMethod,
+        docType: confirmDocType,
+        referenceNumber: confirmReference
+      });
+
+      if (res.error) {
+        alert(`Error al confirmar pedido: ${res.error}`);
+        setIsConfirmingSubmitting(false);
+        return;
+      }
+
+      setOrderSuccessToast(`¡Pedido #${confirmingOrder.ticket_code} confirmado con éxito! Venta registrada en historial y stock rebajado.`);
+      setConfirmingOrder(null);
+      setConfirmReference('');
+      setTimeout(() => setOrderSuccessToast(''), 6000);
+    } catch (e) {
+      alert(`Error inesperado: ${e.message}`);
+    } finally {
+      setIsConfirmingSubmitting(false);
+    }
+  };
+
+  const handleCancelOrder = async (order) => {
+    const reason = window.prompt(`¿Deseas rechazar el pedido #${order.ticket_code}? Ingresa el motivo (opcional):`, 'Cliente canceló / Sin respuesta');
+    if (reason === null) return;
+
+    const res = await cancelWebOrder(order.id, reason);
+    if (res.error) {
+      alert(`Error al rechazar pedido: ${res.error}`);
+    } else {
+      setOrderSuccessToast(`Pedido #${order.ticket_code} marcado como rechazado.`);
+      setTimeout(() => setOrderSuccessToast(''), 4000);
+    }
   };
 
   // ── ESTADOS DE VISTA AMPLIADA / FICHA DE PRODUCTO (MODO MERCADO LIBRE) ──
@@ -703,12 +803,19 @@ export default function Showcase({ isPublicView = false }) {
 
     if (!isFoodBusiness) {
       orderType = storeDeliveryMode; // 'delivery' | 'pickup'
-      const res = await shareCart(currentBasket);
-      if (!res.error) {
-        ticketCode = res.code;
-      } else {
-        ticketCode = `ONL-${Math.floor(100 + Math.random() * 900)}`;
-      }
+      const res = await createWebOrder({
+        order_type: orderType,
+        customer_name: participantName,
+        customer_phone: customerPhone,
+        shipping_address: shippingAddress,
+        notes: currentNotes,
+        total_amount: currentTotal,
+        items: currentBasket,
+        branch_id: activeBranchId,
+        branch_name: activeBranch?.name
+      });
+      ticketCode = res?.code || `PED-${Math.floor(1000 + Math.random() * 9000)}`;
+      await shareCart(currentBasket).catch(() => {});
     } else if (selectedTableId && !hasNoTableMode) {
       orderType = 'table';
       const targetTable = tables.find(t => t.id === selectedTableId) || tables[0];
@@ -724,16 +831,33 @@ export default function Showcase({ isPublicView = false }) {
       }
 
       ticketCode = `ORD-${Math.floor(100 + Math.random() * 900)}`;
+      await createWebOrder({
+        ticket_code: ticketCode,
+        order_type: 'table',
+        customer_name: participantName || `Mesa ${finalTableName}`,
+        customer_phone: customerPhone,
+        shipping_address: finalTableName ? `Mesa: ${finalTableName}` : '',
+        notes: currentNotes,
+        total_amount: currentTotal,
+        items: currentBasket,
+        branch_id: activeBranchId,
+        branch_name: activeBranch?.name
+      });
     } else {
       orderType = 'takeaway';
-      const res = await shareCart(currentBasket);
-      if (!res.error) {
-        ticketCode = res.code;
-      } else {
-        alert(`Error al procesar: ${res.error}`);
-        setProcessingOrder(false);
-        return;
-      }
+      const res = await createWebOrder({
+        order_type: 'takeaway',
+        customer_name: participantName,
+        customer_phone: customerPhone,
+        shipping_address: shippingAddress,
+        notes: currentNotes,
+        total_amount: currentTotal,
+        items: currentBasket,
+        branch_id: activeBranchId,
+        branch_name: activeBranch?.name
+      });
+      ticketCode = res?.code || `PED-${Math.floor(1000 + Math.random() * 9000)}`;
+      await shareCart(currentBasket).catch(() => {});
     }
 
     // Formatear mensaje para el WhatsApp del dueño
@@ -841,10 +965,643 @@ export default function Showcase({ isPublicView = false }) {
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '880px', margin: '0 auto', paddingBottom: '140px' }}>
       
+      {/* ── BANNER DE ÉXITO TRAS CONFIRMAR O RECHAZAR PEDIDO ── */}
+      {orderSuccessToast && (
+        <div style={{
+          background: '#ecfdf5',
+          border: '1px solid #10b981',
+          color: '#065f46',
+          borderRadius: '14px',
+          padding: '14px 18px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontWeight: 700,
+          fontSize: '13px',
+          boxShadow: '0 4px 14px rgba(16, 185, 129, 0.15)',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <CheckCircle size={20} color="#10b981" />
+          <span>{orderSuccessToast}</span>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🧭 SELECTOR DE PESTAÑAS ADMIN: PEDIDOS WEB/QR vs CATÁLOGO/ENLACES 🧭 */}
+      {/* ========================================================================= */}
+      {!isPublicView && (
+        <div style={{
+          display: 'flex',
+          gap: '10px',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          background: '#ffffff',
+          padding: '8px',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)'
+        }}>
+          <button
+            type="button"
+            onClick={() => setAdminTab('orders')}
+            style={{
+              flex: 1,
+              minWidth: '220px',
+              padding: '12px 18px',
+              borderRadius: '12px',
+              border: adminTab === 'orders' ? '2px solid #0284c7' : '1px solid transparent',
+              background: adminTab === 'orders' ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' : '#f8fafc',
+              color: adminTab === 'orders' ? '#ffffff' : '#475569',
+              fontWeight: 800,
+              fontSize: '13.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              boxShadow: adminTab === 'orders' ? '0 4px 14px rgba(2, 132, 199, 0.25)' : 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Inbox size={18} color={adminTab === 'orders' ? '#38bdf8' : '#64748b'} />
+            <span>📥 Pedidos Web y QR</span>
+            {pendingOrdersCount > 0 ? (
+              <span style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 900,
+                padding: '3px 9px',
+                borderRadius: '999px',
+                boxShadow: '0 0 10px rgba(239, 68, 68, 0.5)',
+                animation: 'pulse 1.5s infinite'
+              }}>
+                {pendingOrdersCount} pendiente{pendingOrdersCount > 1 ? 's' : ''}
+              </span>
+            ) : (
+              <span style={{
+                background: adminTab === 'orders' ? 'rgba(255,255,255,0.15)' : '#e2e8f0',
+                color: adminTab === 'orders' ? '#cbd5e1' : '#64748b',
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '999px'
+              }}>
+                {webOrders.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminTab('showcase')}
+            style={{
+              flex: 1,
+              minWidth: '220px',
+              padding: '12px 18px',
+              borderRadius: '12px',
+              border: adminTab === 'showcase' ? '2px solid #0284c7' : '1px solid transparent',
+              background: adminTab === 'showcase' ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' : '#f8fafc',
+              color: adminTab === 'showcase' ? '#ffffff' : '#475569',
+              fontWeight: 800,
+              fontSize: '13.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              boxShadow: adminTab === 'showcase' ? '0 4px 14px rgba(2, 132, 199, 0.25)' : 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Store size={18} color={adminTab === 'showcase' ? '#38bdf8' : '#64748b'} />
+            <span>🛍️ Catálogo, Enlaces y Códigos QR</span>
+          </button>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📥 BANDEJA DE PEDIDOS WEB Y QR (ADMINISTRACIÓN) 📥 */}
+      {/* ========================================================================= */}
+      {!isPublicView && adminTab === 'orders' && (
+        <div style={{ animation: 'fadeIn 0.3s ease', marginBottom: '32px' }}>
+          {/* Cabecera & Métricas */}
+          <div style={{ background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 16px rgba(15,23,42,0.04)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)' }}>
+                  <Inbox size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>
+                    Bandeja de Pedidos Web y QR
+                  </h3>
+                  <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Revisa y confirma los pedidos recibidos para ingresar automáticamente la venta al historial y descontar el inventario.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchWebOrders()}
+                disabled={webOrdersLoading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  cursor: webOrdersLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(15,23,42,0.04)'
+                }}
+              >
+                <RefreshCw size={15} style={{ animation: webOrdersLoading ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{webOrdersLoading ? 'Actualizando...' : 'Actualizar Pedidos'}</span>
+              </button>
+            </div>
+
+            {/* Tarjetas de Resumen de Pedidos */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+              <div style={{ background: '#fef3c7', borderRadius: '14px', padding: '14px', border: '1px solid #fde68a' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  ⏳ Por Confirmar
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#b45309', marginTop: '4px' }}>
+                  {pendingOrdersCount}
+                </div>
+                <div style={{ fontSize: '11px', color: '#78350f', marginTop: '2px' }}>
+                  Requieren confirmación
+                </div>
+              </div>
+
+              <div style={{ background: '#ecfdf5', borderRadius: '14px', padding: '14px', border: '1px solid #a7f3d0' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  ✅ Confirmados
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#059669', marginTop: '4px' }}>
+                  {webOrders.filter(o => o.status === 'confirmed').length}
+                </div>
+                <div style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>
+                  Ventas registradas y stock rebajado
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', borderRadius: '14px', padding: '14px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  ❌ Rechazados
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#475569', marginTop: '4px' }}>
+                  {webOrders.filter(o => o.status === 'cancelled').length}
+                </div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                  Cancelados sin alterar inventario
+                </div>
+              </div>
+
+              <div style={{ background: '#f0f9ff', borderRadius: '14px', padding: '14px', border: '1px solid #bae6fd' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  📦 Total Pedidos
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#0284c7', marginTop: '4px' }}>
+                  {webOrders.length}
+                </div>
+                <div style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px' }}>
+                  Histórico de pedidos web/QR
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Barra de Filtros y Búsqueda */}
+          <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px 18px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'pending', label: `⏳ Pendientes (${pendingOrdersCount})` },
+                { id: 'all', label: `Todos (${webOrders.length})` },
+                { id: 'confirmed', label: `✅ Confirmados (${webOrders.filter(o => o.status === 'confirmed').length})` },
+                { id: 'cancelled', label: `❌ Rechazados (${webOrders.filter(o => o.status === 'cancelled').length})` }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setOrderFilter(tab.id)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    border: orderFilter === tab.id ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                    background: orderFilter === tab.id ? 'rgba(2, 132, 199, 0.1)' : '#ffffff',
+                    color: orderFilter === tab.id ? '#0284c7' : '#64748b',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ position: 'relative', minWidth: '240px', flex: 1, maxWidth: '340px' }}>
+              <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                placeholder="Buscar ticket, cliente o teléfono..."
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 36px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12px',
+                  background: '#f8fafc',
+                  color: '#0f172a'
+                }}
+              />
+              {orderSearch && (
+                <button
+                  type="button"
+                  onClick={() => setOrderSearch('')}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Lista de Pedidos */}
+          {filteredOrders.length === 0 ? (
+            <div style={{ background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', color: '#94a3b8' }}>
+                <Inbox size={32} />
+              </div>
+              <h4 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                No hay pedidos en esta vista
+              </h4>
+              <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', maxWidth: '420px', marginInline: 'auto' }}>
+                {orderFilter === 'pending'
+                  ? '¡Estás al día! No tienes pedidos web ni QR pendientes por confirmar en este momento.'
+                  : 'No se encontraron pedidos con los filtros aplicados.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredOrders.map(order => {
+                const isPending = order.status === 'pending';
+                const isConfirmed = order.status === 'confirmed';
+                const isCancelled = order.status === 'cancelled';
+                const itemsList = order.items || [];
+                const cleanPhone = (order.customer_phone || '').replace(/[^0-9]/g, '');
+                const whatsappChatUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : null;
+                const orderDateFormatted = order.created_at ? new Date(order.created_at).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' }) : 'Reciente';
+
+                return (
+                  <div
+                    key={order.id || order.ticket_code}
+                    style={{
+                      background: '#ffffff',
+                      borderRadius: '18px',
+                      border: isPending ? '2px solid #f59e0b' : '1px solid #e2e8f0',
+                      boxShadow: isPending ? '0 4px 20px rgba(245, 158, 11, 0.12)' : '0 2px 10px rgba(15,23,42,0.04)',
+                      overflow: 'hidden',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {/* Cabecera de la Tarjeta */}
+                    <div style={{
+                      background: isPending ? '#fffbeb' : (isConfirmed ? '#f0fdf4' : '#f8fafc'),
+                      padding: '14px 20px',
+                      borderBottom: '1px solid #f1f5f9',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '10px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontFamily: 'monospace',
+                          fontWeight: 900,
+                          fontSize: '14px',
+                          color: '#0f172a',
+                          background: '#ffffff',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1'
+                        }}>
+                          #{order.ticket_code || order.id}
+                        </span>
+
+                        <span style={{ fontSize: '11.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={13} />
+                          <span>{orderDateFormatted}</span>
+                        </span>
+
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: order.order_type === 'delivery' ? '#ecfdf5' : '#f0f9ff',
+                          color: order.order_type === 'delivery' ? '#059669' : '#0284c7',
+                          border: '1px solid rgba(0,0,0,0.06)'
+                        }}>
+                          {order.order_type === 'delivery' && '🛵 Envío a Domicilio'}
+                          {order.order_type === 'pickup' && '🏬 Retiro en Local'}
+                          {order.order_type === 'table' && '🪑 Pedido en Mesa'}
+                          {order.order_type === 'takeaway' && '🛍️ Para Llevar'}
+                        </span>
+                      </div>
+
+                      {/* Badge de Estado */}
+                      <div>
+                        {isPending && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: '#fef3c7',
+                            color: '#b45309',
+                            border: '1px solid #fde68a',
+                            fontSize: '11.5px',
+                            fontWeight: 900,
+                            padding: '4px 10px',
+                            borderRadius: '8px'
+                          }}>
+                            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#d97706', animation: 'pulse 1.5s infinite' }} />
+                            <span>Pendiente de Confirmación</span>
+                          </span>
+                        )}
+
+                        {isConfirmed && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: '#d1fae5',
+                            color: '#047857',
+                            border: '1px solid #a7f3d0',
+                            fontSize: '11.5px',
+                            fontWeight: 900,
+                            padding: '4px 10px',
+                            borderRadius: '8px'
+                          }}>
+                            <CheckCircle2 size={13} color="#059669" />
+                            <span>Confirmado y Descontado</span>
+                          </span>
+                        )}
+
+                        {isCancelled && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: '#ffe4e6',
+                            color: '#be123c',
+                            border: '1px solid #fecdd3',
+                            fontSize: '11.5px',
+                            fontWeight: 900,
+                            padding: '4px 10px',
+                            borderRadius: '8px'
+                          }}>
+                            <XCircle size={13} color="#e11d48" />
+                            <span>Rechazado</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cuerpo de la Tarjeta */}
+                    <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                      
+                      {/* Columna Izquierda: Cliente */}
+                      <div style={{ borderRight: '1px solid #f1f5f9', paddingRight: '16px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                          👤 Datos del Comprador
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <User size={15} color="#64748b" />
+                            <strong style={{ color: '#0f172a' }}>{order.customer_name || 'Cliente Web'}</strong>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <Phone size={15} color="#64748b" />
+                            <span style={{ color: '#334155' }}>{order.customer_phone || 'Teléfono no suministrado'}</span>
+                            {whatsappChatUrl && (
+                              <a
+                                href={whatsappChatUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  background: '#25d366',
+                                  color: '#ffffff',
+                                  textDecoration: 'none',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  marginLeft: '4px'
+                                }}
+                              >
+                                <MessageCircle size={12} />
+                                <span>WhatsApp</span>
+                              </a>
+                            )}
+                          </div>
+
+                          {order.shipping_address && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '2px' }}>
+                              <MapPin size={15} color="#64748b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <span style={{ color: '#334155', lineHeight: 1.4 }}>{order.shipping_address}</span>
+                            </div>
+                          )}
+
+                          {order.notes && (
+                            <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1', marginTop: '4px' }}>
+                              <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '2px' }}>
+                                Nota del Cliente:
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#334155', fontStyle: 'italic' }}>
+                                "{order.notes}"
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Columna Derecha: Productos */}
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                          🛍️ Artículos Solicitados ({itemsList.length})
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', maxHeight: '180px', overflowY: 'auto' }}>
+                          {itemsList.map((item, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: 800, color: '#0284c7', background: 'rgba(2,132,199,0.1)', padding: '2px 6px', borderRadius: '6px' }}>
+                                  {item.cantidad}x
+                                </span>
+                                <div>
+                                  <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                    {item.name || item.part?.name || 'Producto'}
+                                  </div>
+                                  {(item.selectedVariant?.color || item.color) && (
+                                    <div style={{ fontSize: '10.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.selectedVariant?.hex || '#94a3b8', display: 'inline-block' }} />
+                                      <span>Color: {item.selectedVariant?.color || item.color}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                                ${((Number(item.sell_price || item.part?.sell_price || 0)) * Number(item.cantidad || 1)).toFixed(2)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Resumen Total */}
+                        <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Total del Pedido:</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>
+                              ${Number(order.total_amount || 0).toFixed(2)}
+                            </div>
+                            {companySettings.use_usd_pricing && companySettings.exchange_rate && (
+                              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+                                Bs. {(Number(order.total_amount || 0) * companySettings.exchange_rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Info de Confirmado / Cancelado */}
+                    {isConfirmed && (
+                      <div style={{ background: '#f0fdf4', padding: '10px 20px', borderTop: '1px solid #bbf7d0', fontSize: '11.5px', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle2 size={15} color="#16a34a" />
+                          <span><strong>Venta ingresada a Caja</strong> mediante {order.payment_method || 'Pago Móvil'} ({order.doc_type || 'Boleta'})</span>
+                          {order.reference_number && <span>• Ref: #{order.reference_number}</span>}
+                        </div>
+                        <span style={{ fontSize: '10.5px', color: '#15803d' }}>
+                          ✓ Stock descontado de inventario
+                        </span>
+                      </div>
+                    )}
+
+                    {isCancelled && (
+                      <div style={{ background: '#fff1f2', padding: '10px 20px', borderTop: '1px solid #fecdd3', fontSize: '11.5px', color: '#9f1239', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <XCircle size={15} color="#e11d48" />
+                        <span>Pedido rechazado. Motivo: {order.cancel_reason || 'Sin motivo especificado'}</span>
+                      </div>
+                    )}
+
+                    {/* Botones de Acción */}
+                    {isPending && (
+                      <div style={{ background: '#fafafa', padding: '14px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelOrder(order)}
+                          style={{
+                            padding: '9px 16px',
+                            borderRadius: '10px',
+                            border: '1px solid #fca5a5',
+                            background: '#ffffff',
+                            color: '#dc2626',
+                            fontSize: '12.5px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          ❌ Rechazar Pedido
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmingOrder(order);
+                            setConfirmPaymentMethod('Pago Móvil');
+                            setConfirmDocType('Boleta');
+                            setConfirmReference('');
+                          }}
+                          style={{
+                            padding: '9px 20px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>Confirmar y Descontar Stock</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ALERTA EN PESTAÑA CATÁLOGO/QR SI HAY PEDIDOS PENDIENTES ── */}
+      {!isPublicView && adminTab === 'showcase' && pendingOrdersCount > 0 && (
+        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '16px', padding: '14px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🔔</span>
+            <div>
+              <strong style={{ fontSize: '13.5px', color: '#92400e' }}>
+                Tienes {pendingOrdersCount} pedido{pendingOrdersCount > 1 ? 's' : ''} web/QR pendiente{pendingOrdersCount > 1 ? 's' : ''} por confirmar
+              </strong>
+              <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#b45309' }}>
+                Ingresa a la bandeja para confirmar el cobro y rebajar el stock automáticamente.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdminTab('orders')}
+            style={{ padding: '8px 16px', borderRadius: '10px', background: '#d97706', color: '#ffffff', border: 'none', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Inbox size={14} />
+            <span>Ver Pedidos ({pendingOrdersCount})</span>
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 🛠️ BARRA SIMULADORA ADMIN (CONTROLES DE PRUEBA Y GENERADOR DE LINK/QR) 🛠️ */}
       {/* ========================================================================= */}
-      {!isPublicView && (
+      {!isPublicView && adminTab === 'showcase' && (
         <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15,23,42,0.04)' }}>
           
           {/* Cabecera del Generador */}
@@ -1148,7 +1905,9 @@ export default function Showcase({ isPublicView = false }) {
       {/* ========================================================================= */}
       {/* 📱 MARCO DE PANTALLA DE CELULAR / MARCA DE LA TIENDA CLIENTE 📱 */}
       {/* ========================================================================= */}
-      <div style={{ background: '#f8fafc', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 12px 32px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
+      {(isPublicView || adminTab === 'showcase') && (
+        <>
+        <div style={{ background: '#f8fafc', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 12px 32px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
         
         {/* Cabecera de la Tienda (Identidad Personalizable con Logo & Colores) */}
         <div style={{
@@ -1880,6 +2639,8 @@ export default function Showcase({ isPublicView = false }) {
             <span>MI PEDIDO ↗</span>
           </button>
         </div>
+      )}
+      </>
       )}
 
       {/* ========================================================================= */}
@@ -3563,6 +4324,177 @@ export default function Showcase({ isPublicView = false }) {
         </div>
       );
     })()}
+
+      {/* ========================================================================= */}
+      {/* 💳 MODAL DE CONFIRMACIÓN DE PAGO Y DESCUENTO DE STOCK 💳 */}
+      {/* ========================================================================= */}
+      {confirmingOrder && (
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 20000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', padding: '16px' }}
+          onClick={() => { if (!isConfirmingSubmitting) setConfirmingOrder(null); }}
+        >
+          <div 
+            className="modal-content glass-panel" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '520px', width: '100%', padding: '26px', background: '#ffffff', borderRadius: '24px', border: '1px solid #e2e8f0', color: '#0f172a', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', animation: 'fadeIn 0.2s ease' }}
+          >
+            {/* Cabecera del Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.12)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 900, color: '#0f172a' }}>
+                    Confirmar Pedido #{confirmingOrder.ticket_code}
+                  </h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Cliente: <strong style={{ color: '#0f172a' }}>{confirmingOrder.customer_name}</strong> • Total: <strong style={{ color: '#059669' }}>${Number(confirmingOrder.total_amount || 0).toFixed(2)}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isConfirmingSubmitting}
+                onClick={() => setConfirmingOrder(null)}
+                style={{ background: 'none', border: 'none', cursor: isConfirmingSubmitting ? 'not-allowed' : 'pointer', color: '#94a3b8' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Formulario */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Selector de Método de Pago */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '8px' }}>
+                  Método de Pago Recibido:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                  {[
+                    { id: 'Pago Móvil', label: '📱 Pago Móvil' },
+                    { id: 'Transferencia', label: '🏦 Transferencia' },
+                    { id: 'Efectivo Divisas', label: '💵 Efectivo USD' },
+                    { id: 'Efectivo Bolívares', label: '🇻🇪 Efectivo Bs' },
+                    { id: 'Tarjeta', label: '💳 Punto de Venta' },
+                    { id: 'Zelle', label: '⚡ Zelle' },
+                    { id: 'Binance / Cripto', label: '🪙 Binance' }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setConfirmPaymentMethod(m.id)}
+                      style={{
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: confirmPaymentMethod === m.id ? '2px solid #059669' : '1px solid #cbd5e1',
+                        background: confirmPaymentMethod === m.id ? '#ecfdf5' : '#ffffff',
+                        color: confirmPaymentMethod === m.id ? '#065f46' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: confirmPaymentMethod === m.id ? 800 : 600,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tipo de Documento y Referencia */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '6px' }}>
+                    Tipo de Comprobante:
+                  </label>
+                  <select
+                    value={confirmDocType}
+                    onChange={(e) => setConfirmDocType(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', fontSize: '12px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
+                  >
+                    <option value="Boleta">Boleta de Venta</option>
+                    <option value="Factura">Factura</option>
+                    <option value="Recibo">Comprobante Interno</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '6px' }}>
+                    N° Referencia / Comprobante:
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmReference}
+                    onChange={(e) => setConfirmReference(e.target.value)}
+                    placeholder="Ej. 492041 (Opcional)"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', fontSize: '12px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
+
+              {/* Aviso Explicativo de Deducción de Stock y Ventas */}
+              <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '12px 14px', border: '1px solid #bbf7d0', fontSize: '11.5px', color: '#166534', lineHeight: 1.5 }}>
+                <strong>✓ Al presionar Confirmar:</strong>
+                <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px' }}>
+                  <li>Se registrará la venta automáticamente en el <strong>Historial de Ventas</strong> y en el flujo de caja.</li>
+                  <li>Se <strong>descontará el stock</strong> en tiempo real del inventario (incluyendo variantes de color seleccionadas).</li>
+                  <li>El pedido pasará a estar archivado como <strong>Confirmado</strong>.</li>
+                </ul>
+              </div>
+
+              {/* Botones de Acción */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  disabled={isConfirmingSubmitting}
+                  onClick={() => setConfirmingOrder(null)}
+                  style={{ padding: '9px 16px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#64748b', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExecuteConfirmOrder}
+                  disabled={isConfirmingSubmitting}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 900,
+                    cursor: isConfirmingSubmitting ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
+                  }}
+                >
+                  {isConfirmingSubmitting ? (
+                    <>
+                      <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                      <span>Procesando venta...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} />
+                      <span>Confirmar Venta y Rebajar Inventario</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 🔒 MODAL DESBLOQUEO RÁPIDO PARA EL DUEÑO 🔒 */}

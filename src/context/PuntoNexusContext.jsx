@@ -286,6 +286,20 @@ export const PuntoNexusProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // --- BANDEJA DE PEDIDOS WEB / QR (VITRINA) ---
+  const [webOrders, setWebOrders] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`);
+        return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [webOrdersLoading, setWebOrdersLoading] = useState(false);
+
   // Estado de localización, tipo de cambio e identidad de marca (logo & colores)
   const [companySettings, setCompanySettings] = useState(() => {
     const saved = localStorage.getItem(`punto_nexus_company_settings_${companyId || 'default'}`);
@@ -2241,8 +2255,9 @@ export const PuntoNexusProvider = ({ children }) => {
           return { error: "Código de canasta no encontrado o caducado." };
         }
 
-        const mapped = data.items.map(item => {
-          const prod = inventory.find(p => p.id === item.id);
+        const rawList = Array.isArray(data.items) ? data.items : (data.items?.items || []);
+        const mapped = rawList.map(item => {
+          const prod = inventory.find(p => p.id === (item.id || item.part_id));
           if (prod) return { part: prod, cantidad: item.cantidad, selectedVariant: item.selectedVariant || null };
           return null;
         }).filter(Boolean);
@@ -3693,6 +3708,296 @@ export const PuntoNexusProvider = ({ children }) => {
     }
   };
 
+  // --- BANDEJA DE PEDIDOS WEB / QR (VITRINA) ---
+  const fetchWebOrders = useCallback(async () => {
+    const isMock = !isUUID(companyId);
+    setWebOrdersLoading(true);
+
+    let localOrders = [];
+    try {
+      const saved = localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`);
+      if (saved) localOrders = JSON.parse(saved);
+    } catch (e) {
+      console.warn("Error leyendo pedidos web locales:", e);
+    }
+
+    if (isMock) {
+      setWebOrders(localOrders);
+      setWebOrdersLoading(false);
+      return { orders: localOrders, error: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('punto_nexus_shared_carts')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const serverOrders = (data || []).map(row => {
+        const raw = row.items;
+        if (!raw) return null;
+        
+        if (typeof raw === 'object' && !Array.isArray(raw)) {
+          return {
+            ...raw,
+            id: row.id || raw.id || raw.order_id || raw.ticket_code,
+            ticket_code: raw.ticket_code || raw.order_id || row.id,
+            created_at: raw.created_at || row.created_at
+          };
+        }
+        
+        if (Array.isArray(raw)) {
+          return {
+            id: row.id,
+            order_id: row.id,
+            ticket_code: row.id,
+            order_type: 'takeaway',
+            customer_name: 'Cliente Online',
+            customer_phone: '',
+            shipping_address: '',
+            notes: '',
+            total_amount: raw.reduce((sum, it) => {
+              const p = inventory.find(prod => prod.id === it.id);
+              return sum + (Number(it.cantidad || 1) * Number(p?.sell_price || 0));
+            }, 0),
+            items: raw.map(it => {
+              const p = inventory.find(prod => prod.id === it.id);
+              return {
+                id: it.id,
+                name: p?.name || 'Producto',
+                sku: p?.sku || '',
+                sell_price: p?.sell_price || 0,
+                cost_price: p?.cost_price || 0,
+                cantidad: it.cantidad,
+                selectedVariant: it.selectedVariant || null,
+                part: p
+              };
+            }),
+            status: 'pending',
+            branch_id: activeBranchId,
+            created_at: row.created_at
+          };
+        }
+        return null;
+      }).filter(Boolean);
+
+      const mapById = new Map();
+      serverOrders.forEach(o => mapById.set(o.id, o));
+      localOrders.forEach(o => {
+        if (!mapById.has(o.id)) {
+          mapById.set(o.id, o);
+        }
+      });
+
+      const merged = Array.from(mapById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setWebOrders(merged);
+      try {
+        localStorage.setItem(`punto_nexus_web_orders_${companyId || 'default'}`, JSON.stringify(merged));
+      } catch (e) {}
+
+      setWebOrdersLoading(false);
+      return { orders: merged, error: null };
+    } catch (err) {
+      console.warn("Aviso al consultar pedidos web en Supabase:", err);
+      setWebOrders(localOrders);
+      setWebOrdersLoading(false);
+      return { orders: localOrders, error: err.message };
+    }
+  }, [companyId, inventory, activeBranchId]);
+
+  const createWebOrder = async (orderPayload) => {
+    const isMock = !isUUID(companyId);
+    const code = orderPayload.ticket_code || `PED-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const formattedItems = (orderPayload.items || []).map(item => {
+      const part = item.part || item;
+      return {
+        id: part.id || item.id,
+        part_id: part.id || item.id,
+        name: part.name || item.name || 'Producto',
+        sku: part.sku || item.sku || '',
+        sell_price: Number(part.sell_price || item.sell_price || 0),
+        cost_price: Number(part.cost_price || item.cost_price || 0),
+        cantidad: Number(item.cantidad || item.quantity || 1),
+        selectedVariant: item.selectedVariant || null,
+        color: item.selectedVariant?.color || item.color || null,
+        image_url: part.image_url || item.image_url || null,
+        part: part
+      };
+    });
+
+    const newOrder = {
+      id: code,
+      order_id: code,
+      ticket_code: code,
+      order_type: orderPayload.order_type || 'delivery',
+      customer_name: (orderPayload.customer_name || '').trim() || 'Cliente Web',
+      customer_phone: (orderPayload.customer_phone || '').trim(),
+      shipping_address: (orderPayload.shipping_address || '').trim(),
+      notes: (orderPayload.notes || '').trim(),
+      total_amount: Number(orderPayload.total_amount || 0),
+      currency_symbol: companySettings?.currency_symbol || '$',
+      items: formattedItems,
+      status: 'pending',
+      branch_id: orderPayload.branch_id || activeBranchId,
+      branch_name: activeBranch?.name || 'Sede Principal',
+      created_at: new Date().toISOString(),
+      confirmed_at: null,
+      sale_id: null
+    };
+
+    setWebOrders(prev => [newOrder, ...prev.filter(o => o.id !== code)]);
+    try {
+      const currentLocal = JSON.parse(localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`) || '[]');
+      localStorage.setItem(`punto_nexus_web_orders_${companyId || 'default'}`, JSON.stringify([newOrder, ...currentLocal.filter(o => o.id !== code)]));
+    } catch (e) {}
+
+    if (!isMock) {
+      try {
+        await supabase
+          .from('punto_nexus_shared_carts')
+          .insert([{
+            id: code,
+            company_id: companyId,
+            items: newOrder
+          }]);
+      } catch (err) {
+        console.warn("Aviso al registrar pedido web en Supabase:", err);
+      }
+    }
+
+    return { code, order: newOrder, error: null };
+  };
+
+  const confirmWebOrder = async (orderId, paymentOptions = {}) => {
+    const order = webOrders.find(o => o.id === orderId || o.ticket_code === orderId);
+    if (!order) {
+      return { error: 'Pedido no encontrado.' };
+    }
+    if (order.status === 'confirmed') {
+      return { error: 'Este pedido ya fue confirmado previamente.' };
+    }
+
+    const paymentMethod = paymentOptions.paymentMethod || 'Pago Móvil';
+    const docType = paymentOptions.docType || 'Boleta';
+    const refNumber = paymentOptions.referenceNumber || null;
+
+    const cartItemsForSale = (order.items || []).map(item => {
+      const currentProd = inventory.find(p => p.id === item.id || p.id === item.part_id);
+      return {
+        part: currentProd || item.part || {
+          id: item.id || item.part_id,
+          name: item.name,
+          sku: item.sku || '',
+          sell_price: item.sell_price,
+          cost_price: item.cost_price || 0,
+          stock: currentProd?.stock || 0
+        },
+        id: item.id || item.part_id,
+        cantidad: Number(item.cantidad || 1),
+        selectedVariant: item.selectedVariant || null
+      };
+    });
+
+    const customerDetails = {
+      customer_name: order.customer_name || 'Cliente Web',
+      customer_rut: '',
+      customer_giro: order.order_type === 'delivery' ? 'Delivery' : 'Cliente Web/QR',
+      customer_address: order.shipping_address || '',
+      customer_phone: order.customer_phone || ''
+    };
+
+    const saleResult = await processSale(
+      cartItemsForSale,
+      paymentMethod,
+      docType,
+      0,
+      true,
+      refNumber,
+      customerDetails
+    );
+
+    if (saleResult.error) {
+      return { error: `Error al procesar la venta e inventario: ${saleResult.error}` };
+    }
+
+    const confirmedOrder = {
+      ...order,
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString(),
+      sale_id: saleResult.sale?.id || null,
+      payment_method: paymentMethod,
+      doc_type: docType,
+      reference_number: refNumber
+    };
+
+    setWebOrders(prev => prev.map(o => o.id === orderId ? confirmedOrder : o));
+    try {
+      const currentLocal = JSON.parse(localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`) || '[]');
+      const updatedLocal = currentLocal.map(o => o.id === orderId ? confirmedOrder : o);
+      localStorage.setItem(`punto_nexus_web_orders_${companyId || 'default'}`, JSON.stringify(updatedLocal));
+    } catch (e) {}
+
+    if (isUUID(companyId)) {
+      try {
+        await supabase
+          .from('punto_nexus_shared_carts')
+          .update({ items: confirmedOrder })
+          .eq('id', orderId)
+          .eq('company_id', companyId);
+      } catch (err) {
+        console.warn("Aviso actualizando pedido confirmado en Supabase:", err);
+      }
+    }
+
+    return { success: true, sale: saleResult.sale, order: confirmedOrder };
+  };
+
+  const cancelWebOrder = async (orderId, reason = '') => {
+    const order = webOrders.find(o => o.id === orderId || o.ticket_code === orderId);
+    if (!order) return { error: 'Pedido no encontrado.' };
+
+    const cancelledOrder = {
+      ...order,
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancel_reason: reason || 'Cancelado por el administrador'
+    };
+
+    setWebOrders(prev => prev.map(o => o.id === orderId ? cancelledOrder : o));
+    try {
+      const currentLocal = JSON.parse(localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`) || '[]');
+      const updatedLocal = currentLocal.map(o => o.id === orderId ? cancelledOrder : o);
+      localStorage.setItem(`punto_nexus_web_orders_${companyId || 'default'}`, JSON.stringify(updatedLocal));
+    } catch (e) {}
+
+    if (isUUID(companyId)) {
+      try {
+        await supabase
+          .from('punto_nexus_shared_carts')
+          .update({ items: cancelledOrder })
+          .eq('id', orderId)
+          .eq('company_id', companyId);
+      } catch (err) {
+        console.warn("Aviso actualizando pedido cancelado en Supabase:", err);
+      }
+    }
+
+    return { success: true, order: cancelledOrder };
+  };
+
+  useEffect(() => {
+    if (!companyId) return;
+    fetchWebOrders();
+    const interval = setInterval(() => {
+      fetchWebOrders();
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [companyId, fetchWebOrders]);
+
   // --- EDICIÓN DE DATOS DE FACTURACIÓN Y DOCUMENTO DE VENTA ---
   const updateSaleInvoiceDetails = async (saleId, updatedFields = {}) => {
     if (!saleId) return { error: "ID de venta no válido." };
@@ -4991,6 +5296,12 @@ export const PuntoNexusProvider = ({ children }) => {
     toggleCurrencyOrder,
     shareCart,
     loadSharedCart,
+    webOrders,
+    webOrdersLoading,
+    fetchWebOrders,
+    createWebOrder,
+    confirmWebOrder,
+    cancelWebOrder,
     getAllCompanies,
     createCompany,
     createAccount,
