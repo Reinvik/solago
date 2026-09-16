@@ -1892,7 +1892,8 @@ export const PuntoNexusProvider = ({ children }) => {
                 exchange_rate: Number(cleanDb.exchange_rate) || (countryCode === 'VE' ? (bcvRate || 816.9693) : 1.0),
                 exchange_rate_source: cleanDb.exchange_rate_source || (countryCode === 'VE' ? 'bcv' : 'manual'),
                 ...cleanDb,
-                ...customMeta
+                ...customMeta,
+                owner_whatsapp_phone: customMeta.owner_whatsapp_phone || cleanDb.owner_whatsapp_phone || ''
               };
 
               // Re-asegurar que ningún valor crítico sea null o texto 'null'
@@ -2077,7 +2078,9 @@ export const PuntoNexusProvider = ({ children }) => {
           ...(newSettings.price_color !== undefined ? { price_color: newSettings.price_color } : {}),
           ...(newSettings.button_color !== undefined ? { button_color: newSettings.button_color } : {}),
           ...(newSettings.cancellation_password !== undefined ? { cancellation_password: newSettings.cancellation_password } : {}),
-          ...(newSettings.default_min_stock !== undefined ? { default_min_stock: Math.max(0, Math.floor(Number(newSettings.default_min_stock) || 0)) } : {})
+          ...(newSettings.default_min_stock !== undefined ? { default_min_stock: Math.max(0, Math.floor(Number(newSettings.default_min_stock) || 0)) } : {}),
+          ...(newSettings.owner_whatsapp_phone !== undefined ? { owner_whatsapp_phone: newSettings.owner_whatsapp_phone } : {}),
+          ...(newSettings.phone !== undefined ? { phone: newSettings.phone } : {})
         };
 
         dbUpdates.user_modules = updatedCustomMeta;

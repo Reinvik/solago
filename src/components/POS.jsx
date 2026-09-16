@@ -3,7 +3,7 @@ import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { getCountryConfig } from '../utils/countryConfig';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import AdminPasswordModal from './AdminPasswordModal';
-import { printReceipt, downloadReceiptFile } from '../utils/receiptGenerator';
+import { printReceipt, downloadReceiptFile, getSaleWhatsAppReceiptUrl } from '../utils/receiptGenerator';
 import { playSound, isSoundEnabled, setSoundEnabled } from '../utils/soundEffects';
 import { formatShiftWhatsAppMessage, getWhatsAppShareUrl } from '../utils/shiftExport';
 import { 
@@ -3620,6 +3620,29 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                 <Printer size={16} />
                 <span>🖨️ IMPRIMIR / DESCARGAR PDF ({completedSaleModal.document_type || 'COMPROBANTE'})</span>
               </button>
+
+              <a
+                href={getSaleWhatsAppReceiptUrl(completedSaleModal, companySettings, companyName, activeBranch?.name)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '11px',
+                  borderRadius: '10px',
+                  background: '#16a34a',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)'
+                }}
+              >
+                <MessageCircle size={15} />
+                <span>📲 Compartir Ticket por WhatsApp</span>
+              </a>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <button

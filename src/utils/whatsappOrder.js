@@ -101,9 +101,6 @@ export const formatShowcaseWhatsAppOrder = ({
   return message;
 };
 
-/**
- * Obtiene el enlace directo a WhatsApp (web o app) con el número y mensaje codificado.
- */
-export const getOrderWhatsAppUrl = (phone, message) => {
-  return getWhatsAppShareUrl(phone, message);
+export const getOrderWhatsAppUrl = (phone, message, defaultCountry = 'VE') => {
+  return getWhatsAppShareUrl(phone, message, defaultCountry);
 };

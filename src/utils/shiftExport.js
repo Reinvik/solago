@@ -76,11 +76,52 @@ export const formatShiftWhatsAppMessage = ({ shift, shiftSales = [], companySett
   return msg;
 };
 
-export const getWhatsAppShareUrl = (phone, messageText) => {
-  const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
-  const encodedText = encodeURIComponent(messageText);
-  if (cleanPhone) {
-    return `HTTPS://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
+/**
+ * Normaliza cualquier formato de teléfono ingresado (local o internacional)
+ * para garantizar compatibilidad con WhatsApp API.
+ */
+export const cleanWhatsAppNumber = (phone, defaultCountry = 'VE') => {
+  if (!phone) return '';
+  let raw = String(phone).trim();
+  if (!raw) return '';
+
+  const hadPlus = raw.startsWith('+');
+  let digits = raw.replace(/[^0-9]/g, '');
+  if (!digits) return '';
+
+  // Si ya tenía '+' al inicio o comienza con doble cero, asumimos que tiene código de país internacional
+  if (hadPlus) {
+    return digits;
   }
-  return `HTTPS://api.whatsapp.com/send?text=${encodedText}`;
+  if (digits.startsWith('00')) {
+    return digits.slice(2);
+  }
+
+  // Normalización según país del establecimiento
+  if (defaultCountry === 'VE') {
+    // Venezuela: móvil estándar suele ser 0412, 0414, 0424, 0416, 0426 (11 dígitos)
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = '58' + digits.slice(1);
+    } else if (digits.length === 10 && (digits.startsWith('412') || digits.startsWith('414') || digits.startsWith('424') || digits.startsWith('416') || digits.startsWith('426'))) {
+      digits = '58' + digits;
+    }
+  } else if (defaultCountry === 'CL') {
+    // Chile: móviles de 9 dígitos que inician con 9 (ej: 912345678)
+    if (digits.length === 9 && digits.startsWith('9')) {
+      digits = '56' + digits;
+    } else if (digits.length === 10 && digits.startsWith('09')) {
+      digits = '56' + digits.slice(1);
+    }
+  }
+
+  return digits;
+};
+
+export const getWhatsAppShareUrl = (phone, messageText, defaultCountry = 'VE') => {
+  const cleanPhone = cleanWhatsAppNumber(phone, defaultCountry);
+  const encodedText = encodeURIComponent(messageText || '');
+  if (cleanPhone) {
+    return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
+  }
+  return `https://api.whatsapp.com/send?text=${encodedText}`;
 };

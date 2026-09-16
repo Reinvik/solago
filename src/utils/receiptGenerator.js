@@ -3,6 +3,8 @@
  * Permite imprimir o descargar comprobantes en formato PDF/Impresión Térmica
  */
 
+import { getWhatsAppShareUrl } from './shiftExport';
+
 export const generateReceiptHTML = (sale, companySettings = {}, companyName = 'SoLago', branchName = '') => {
   const isFactura = sale?.document_type === 'Factura';
   const isAnulada = sale?.status === 'Anulada' || sale?.cancelled;
@@ -407,4 +409,59 @@ export const downloadReceiptFile = (sale, companySettings, companyName, branchNa
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+/**
+ * Formatea una venta en un comprobante digital limpio para enviar por WhatsApp
+ */
+export const formatSaleWhatsAppReceipt = (sale, companySettings = {}, companyName = 'SoLago', branchName = '') => {
+  const compName = companyName || companySettings.company_name || 'SoLago';
+  const docType = sale?.document_type || 'Comprobante de Venta';
+  const folio = sale?.id ? `N° SL-${String(sale.id).slice(-8).toUpperCase()}` : '';
+  const isVE = companySettings.country === 'VE' || companySettings.currency_code === 'VES' || !companySettings.country;
+  const dateLocale = isVE ? 'es-VE' : 'es-CL';
+  const dateStr = sale?.sold_at ? new Date(sale.sold_at).toLocaleString(dateLocale, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }) : new Date().toLocaleString(dateLocale);
+
+  const customer = sale?.customer_name || 'Cliente Mostrador';
+  const rawItems = sale?.items;
+  const items = (typeof rawItems === 'string' ? JSON.parse(rawItems || '[]') : (rawItems || [])) || [];
+  const rate = Number(sale?.exchange_rate || companySettings.exchange_rate || 1.0);
+  const symbol = companySettings.currency_symbol || (isVE ? 'Bs.' : '$');
+
+  let msg = `🧾 *${docType.toUpperCase()} ${folio}*\n`;
+  msg += `🏢 *${compName}*${branchName ? ` - ${branchName}` : ''}\n`;
+  msg += `👤 *Cliente:* ${customer}\n`;
+  msg += `🕒 *Fecha:* ${dateStr}\n\n`;
+
+  msg += `📦 *DETALLE DE LA COMPRA:*\n`;
+  items.forEach((it, idx) => {
+    const qty = it.cantidad || it.quantity || 1;
+    const name = it.name || it.part?.name || 'Producto';
+    const price = Number(it.sell_price || it.unit_price || it.price || 0);
+    msg += `${idx + 1}. *${qty}x* ${name} - $${(price * qty).toFixed(2)}\n`;
+  });
+
+  const total = Number(sale?.total_sell || sale?.total_amount || sale?.total || 0);
+  msg += `\n💰 *TOTAL:* $${total.toFixed(2)} USD`;
+  if (rate > 1) {
+    msg += ` (${symbol} ${(total * rate).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})\n`;
+  } else {
+    msg += `\n`;
+  }
+  msg += `💳 *Método de Pago:* ${sale?.payment_method || 'Efectivo'}\n`;
+  msg += `\n✨ *¡Gracias por su compra en ${compName}!*`;
+
+  return msg;
+};
+
+/**
+ * Genera el enlace de WhatsApp listo para abrir
+ */
+export const getSaleWhatsAppReceiptUrl = (sale, companySettings = {}, companyName = 'SoLago', branchName = '', targetPhone = '') => {
+  const phone = targetPhone || companySettings.owner_whatsapp_phone || companySettings.phone || '';
+  const msg = formatSaleWhatsAppReceipt(sale, companySettings, companyName, branchName);
+  return getWhatsAppShareUrl(phone, msg, companySettings.country || 'VE');
 };

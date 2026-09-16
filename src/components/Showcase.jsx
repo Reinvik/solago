@@ -60,6 +60,7 @@ import {
 } from 'lucide-react';
 import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, hasProductVariants, getVariantStock, normalizeVariants, unwrapDescription } from '../utils/productSpecs';
 import { formatShowcaseWhatsAppOrder, getOrderWhatsAppUrl } from '../utils/whatsappOrder';
+import { cleanWhatsAppNumber } from '../utils/shiftExport';
 
 export default function Showcase({ isPublicView = false }) {
   const { 
@@ -861,7 +862,8 @@ export default function Showcase({ isPublicView = false }) {
     }
 
     // Formatear mensaje para el WhatsApp del dueño
-    const ownerPhone = companySettings?.owner_whatsapp_phone || companySettings?.phone || '';
+    const defaultCountry = companySettings?.country || 'VE';
+    const ownerPhone = companySettings?.owner_whatsapp_phone || activeBranch?.phone || companySettings?.phone || '';
     const whatsappMsg = formatShowcaseWhatsAppOrder({
       companyName,
       activeBranch,
@@ -878,15 +880,24 @@ export default function Showcase({ isPublicView = false }) {
       isOnlineStore
     });
 
-    const whatsappUrl = getOrderWhatsAppUrl(ownerPhone, whatsappMsg);
+    const whatsappUrl = getOrderWhatsAppUrl(ownerPhone, whatsappMsg, defaultCountry);
 
     // Intentar abrir WhatsApp inmediatamente
     try {
       if (whatsappUrl) {
-        window.open(whatsappUrl, '_blank');
+        const opened = window.open(whatsappUrl, '_blank');
+        // Si el navegador bloqueó la ventana emergente (típico en navegadores móviles tras await):
+        if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+          if (typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            window.location.href = whatsappUrl;
+          }
+        }
       }
     } catch (e) {
       console.warn("Popup de WhatsApp bloqueado:", e);
+      if (typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && whatsappUrl) {
+        window.location.href = whatsappUrl;
+      }
     }
 
     if (orderType === 'table') {
@@ -1260,7 +1271,7 @@ export default function Showcase({ isPublicView = false }) {
                 const isConfirmed = order.status === 'confirmed';
                 const isCancelled = order.status === 'cancelled';
                 const itemsList = order.items || [];
-                const cleanPhone = (order.customer_phone || '').replace(/[^0-9]/g, '');
+                const cleanPhone = cleanWhatsAppNumber(order.customer_phone, companySettings?.country || 'VE');
                 const whatsappChatUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : null;
                 const orderDateFormatted = order.created_at ? new Date(order.created_at).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' }) : 'Reciente';
 

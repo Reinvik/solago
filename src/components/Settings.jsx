@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { supabase } from '../utils/supabaseClient';
-import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator, BellRing } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator, BellRing, Save } from 'lucide-react';
 import ExchangeRateChart from './ExchangeRateChart';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { isSoundEnabled, setSoundEnabled, playSound, requestNotificationPermission, showNativeSaleNotification } from '../utils/soundEffects';
+import { cleanWhatsAppNumber } from '../utils/shiftExport';
 
 const GIROS_COMERCIALES = [
   { 
@@ -146,6 +147,41 @@ export default function Settings({ onOpenProfileModal }) {
     updateFixedCosts(zeroCosts);
     setSavedFixedCostsMsg('¡Costos fijos restablecidos a $0 (sin costos asumidos)!');
     setTimeout(() => setSavedFixedCostsMsg(null), 2500);
+  };
+
+  // ─── Estado reactivo y persistencia de WhatsApp & Configuración General ───
+  const [whatsappPhone, setWhatsappPhone] = useState(companySettings.owner_whatsapp_phone || '');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState(null);
+
+  useEffect(() => {
+    if (companySettings?.owner_whatsapp_phone !== undefined) {
+      setWhatsappPhone(companySettings.owner_whatsapp_phone || '');
+    }
+  }, [companySettings?.owner_whatsapp_phone]);
+
+  const handleSaveAllSettings = async (additionalUpdates = {}) => {
+    setIsSavingSettings(true);
+    setSaveSuccessMsg(null);
+    try {
+      const cleanPhone = (whatsappPhone || '').trim();
+      const updates = {
+        owner_whatsapp_phone: cleanPhone,
+        phone: cleanPhone,
+        ...additionalUpdates
+      };
+      const res = await updateCompanySettings(updates);
+      if (res?.error) {
+        alert('⚠️ Error al guardar configuración: ' + res.error);
+      } else {
+        setSaveSuccessMsg('¡Configuración guardada y sincronizada exitosamente!');
+        setTimeout(() => setSaveSuccessMsg(null), 4000);
+      }
+    } catch (e) {
+      alert('⚠️ Error inesperado: ' + (e.message || e));
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   // ─── Sincronización manual de sucursales desde Supabase ───
@@ -354,32 +390,82 @@ export default function Settings({ onOpenProfileModal }) {
       
       {/* Cabecera Principal */}
       <div className="glass-panel" style={{
-        padding: '24px',
+        padding: '22px 24px',
         background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(99,102,241,0.06))',
         border: '1px solid rgba(6, 182, 212, 0.2)',
         borderRadius: '16px',
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
         gap: '16px'
       }}>
-        <div style={{
-          width: '52px',
-          height: '52px',
-          borderRadius: '12px',
-          background: 'rgba(6,182,212,0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--color-cyan)',
-          flexShrink: 0
-        }}>
-          <SettingsIcon size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            borderRadius: '12px',
+            background: 'rgba(6,182,212,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--color-cyan)',
+            flexShrink: 0
+          }}>
+            <SettingsIcon size={24} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Ajustes y Localización del Establecimiento</h2>
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
+              Configura el país de operación, moneda, reglas tributarias, logo, WhatsApp de pedidos y sedes.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Ajustes y Localización del Establecimiento</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
-            Configura el país de operación, moneda, reglas tributarias, logo e identidad del menú digital.
-          </p>
+
+        {/* Botón Principal de Guardado */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {saveSuccessMsg && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 800,
+              color: '#059669',
+              background: 'rgba(16, 185, 129, 0.12)',
+              padding: '7px 12px',
+              borderRadius: '9px',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              animation: 'fadeIn 0.2s ease'
+            }}>
+              <Check size={14} />
+              <span>{saveSuccessMsg}</span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => handleSaveAllSettings()}
+            disabled={isSavingSettings}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              borderRadius: '11px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 800,
+              fontSize: '13px',
+              cursor: isSavingSettings ? 'wait' : 'pointer',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {isSavingSettings ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={15} />}
+            <span>{isSavingSettings ? 'Guardando...' : 'Guardar Configuración 💾'}</span>
+          </button>
         </div>
       </div>
 
@@ -698,6 +784,94 @@ export default function Settings({ onOpenProfileModal }) {
             />
           </div>
         </div>
+      </div>
+
+      {/* PANEL 3B: CANAL DE PEDIDOS & WHATSAPP OFICIAL DEL NEGOCIO */}
+      <div className="glass-panel" style={{ padding: '24px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', color: '#10b981', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MessageSquare size={17} style={{ color: '#10b981' }} />
+            Canal de Pedidos & WhatsApp Oficial del Negocio
+          </h3>
+          <span style={{ fontSize: '11px', fontWeight: 800, color: '#059669', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '99px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+            Receptor de Compras & Ventas
+          </span>
+        </div>
+
+        <p style={{ fontSize: '12.5px', color: '#64748b', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+          Este es el número oficial al que los clientes enviarán sus compras y pedidos realizados desde la tienda online o código QR (delivery y retiro), y donde se remitirán los cierres de turno de caja.
+        </p>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 280px' }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Ej: +584121234567 o +56912345678 (con código de país)"
+              value={whatsappPhone}
+              onChange={(e) => setWhatsappPhone(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', fontSize: '13px', fontWeight: 700, borderRadius: '10px' }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleSaveAllSettings()}
+            disabled={isSavingSettings}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              background: '#10b981',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 800,
+              fontSize: '13px',
+              cursor: isSavingSettings ? 'wait' : 'pointer',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {isSavingSettings ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
+            <span>Guardar WhatsApp 💾</span>
+          </button>
+
+          {whatsappPhone && (
+            <a
+              href={`https://wa.me/${cleanWhatsAppNumber(whatsappPhone, companySettings?.country || 'VE')}?text=${encodeURIComponent('Hola, este es un mensaje de prueba desde SoLago.')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 14px',
+                borderRadius: '10px',
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
+                fontWeight: 700,
+                fontSize: '12px',
+                textDecoration: 'none'
+              }}
+              title="Abrir chat de prueba para verificar que el número esté correcto"
+            >
+              <span>📲 Probar Chat</span>
+            </a>
+          )}
+        </div>
+
+        {whatsappPhone && (
+          <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontWeight: 800, color: '#059669' }}>Formato Internacional Detectado:</span>
+            <code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 800, color: '#0f172a' }}>
+              +{cleanWhatsAppNumber(whatsappPhone, companySettings?.country || 'VE')}
+            </code>
+            <span style={{ color: '#10b981' }}>✓ Listo para enviar pedidos directos</span>
+          </div>
+        )}
       </div>
     </div>
   )}
@@ -1798,23 +1972,51 @@ export default function Settings({ onOpenProfileModal }) {
 
             {/* Teléfono WhatsApp para Cierres de Turno */}
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <MessageSquare size={18} style={{ color: '#10b981' }} />
-                <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>WhatsApp del Dueño / Auditor</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MessageSquare size={18} style={{ color: '#10b981' }} />
+                  <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>WhatsApp del Dueño / Auditor</span>
+                </div>
+                {whatsappPhone && (
+                  <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#059669', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+                    +{cleanWhatsAppNumber(whatsappPhone, companySettings?.country || 'VE')}
+                  </span>
+                )}
               </div>
-              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 8px 0', lineHeight: '1.5' }}>
-                Número al que se enviará automáticamente el resumen de arqueo al cerrar turno de caja (con código de país).
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 10px 0', lineHeight: '1.5' }}>
+                Número al que se enviará automáticamente el resumen de arqueo al cerrar turno de caja y los pedidos web (con código de país).
               </p>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Ej: +584121234567 o +56912345678"
-                value={companySettings.owner_whatsapp_phone || ''}
-                onChange={async (e) => {
-                  await updateCompanySettings({ owner_whatsapp_phone: e.target.value });
-                }}
-                style={{ width: '100%', padding: '8px 12px', fontSize: '12.5px' }}
-              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Ej: +584121234567 o +56912345678"
+                  value={whatsappPhone}
+                  onChange={(e) => setWhatsappPhone(e.target.value)}
+                  style={{ flex: '1 1 200px', padding: '8px 12px', fontSize: '12.5px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveAllSettings()}
+                  disabled={isSavingSettings}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    background: '#10b981',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    cursor: isSavingSettings ? 'wait' : 'pointer'
+                  }}
+                >
+                  <Save size={13} />
+                  <span>Guardar</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
