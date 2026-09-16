@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabaseClient';
 import { getCountryConfig, COUNTRY_CONFIGS } from '../utils/countryConfig';
 import { saveOfflineSale, getPendingOfflineSales, removePendingOfflineSale, cacheLocalInventory, getCachedLocalInventory } from '../utils/indexedDb';
 import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants, unwrapDescription } from '../utils/productSpecs';
+import { playSound, showNativeSaleNotification, requestNotificationPermission } from '../utils/soundEffects';
 
 const PuntoNexusContext = createContext();
 
@@ -230,6 +231,9 @@ export const PuntoNexusProvider = ({ children }) => {
   const activeBranch = useMemo(() => {
     return branches.find(b => b.id === activeBranchId) || branches[0] || DEFAULT_MAIN_BRANCH;
   }, [branches, activeBranchId, DEFAULT_MAIN_BRANCH]);
+
+  // Notificación y Alerta Sobresaliente de Nueva Venta / Pedido Web
+  const [latestSaleAlert, setLatestSaleAlert] = useState(null);
 
   const DEFAULT_SYSTEM_USERS = useMemo(() => [
     {
@@ -1074,8 +1078,40 @@ export const PuntoNexusProvider = ({ children }) => {
         .on('postgres_changes', { event: '*', table: 'punto_nexus_inventory' }, () => {
           syncInventoryFromDB(companyId);
         })
-        .on('postgres_changes', { event: '*', table: 'punto_nexus_sales' }, () => {
+        .on('postgres_changes', { event: '*', table: 'punto_nexus_sales' }, (payload) => {
           syncSalesFromDB(companyId);
+          if (payload?.eventType === 'INSERT' && payload?.new) {
+            const lastTime = lastProcessedSaleRef.current?.time || 0;
+            if (Date.now() - lastTime > 4000) {
+              triggerSaleAlert({
+                id: payload.new.id,
+                total: payload.new.total_sell,
+                customer: payload.new.customer_name || 'Venta Remota',
+                itemsCount: Array.isArray(payload.new.items) ? payload.new.items.length : 1,
+                paymentMethod: payload.new.payment_method || 'Caja',
+                docType: payload.new.document_type || 'Venta',
+                branchName: activeBranch?.name,
+                isWebOrder: false
+              });
+            }
+          }
+        })
+        .on('postgres_changes', { event: 'INSERT', table: 'punto_nexus_shared_carts' }, (payload) => {
+          if (payload?.new && payload.new.company_id === companyId) {
+            const orderData = payload.new.items;
+            if (orderData && orderData.status === 'pending') {
+              triggerSaleAlert({
+                id: orderData.id,
+                total: orderData.total_amount,
+                customer: orderData.customer_name || 'Pedido Web / QR',
+                itemsCount: Array.isArray(orderData.items) ? orderData.items.length : 1,
+                paymentMethod: orderData.order_type === 'delivery' ? 'Delivery' : 'Retiro en Tienda',
+                docType: 'Pedido Web',
+                branchName: orderData.branch_name || activeBranch?.name,
+                isWebOrder: true
+              });
+            }
+          }
         })
         .on('postgres_changes', { event: '*', table: 'punto_nexus_users' }, () => {
           syncSystemUsersFromDB(companyId);
@@ -2123,6 +2159,42 @@ export const PuntoNexusProvider = ({ children }) => {
       }
     }
   };
+
+  // Disparar Alerta Sobresaliente y Ruido de Venta / Pedido Web
+  const triggerSaleAlert = useCallback((saleData) => {
+    if (!saleData) return;
+
+    // 1. Reproducir campana de caja registradora ("ruido" distintivo)
+    playSound('sale_alert');
+
+    // 2. Disparar notificación nativa del navegador / SO
+    const customer = saleData.customer_name || saleData.customer || 'Cliente';
+    const amountVal = Number(saleData.total_amount || saleData.total || 0);
+    const amountStr = formatCurrency ? formatCurrency(amountVal) : `$${amountVal.toLocaleString()}`;
+    const title = saleData.isWebOrder
+      ? `🛍️ ¡Nuevo Pedido Web en ${companyName || 'SoLago'}!`
+      : `🔔 ¡Nueva Venta en ${companyName || 'SoLago'}!`;
+    const body = `${amountStr} • ${customer} • ${saleData.itemsCount || 1} producto(s)`;
+    showNativeSaleNotification(title, { body });
+
+    // 3. Fijar estado para el banner flotante sobresaliente en pantalla
+    setLatestSaleAlert({
+      id: saleData.id || `alert-${Date.now()}`,
+      title: saleData.isWebOrder ? '¡NUEVO PEDIDO WEB / QR!' : '¡NUEVA VENTA REGISTRADA!',
+      amount: amountVal,
+      customer: customer,
+      itemsCount: saleData.itemsCount || (Array.isArray(saleData.items) ? saleData.items.length : 1),
+      paymentMethod: saleData.payment_method || saleData.paymentMethod || 'Efectivo',
+      docType: saleData.docType || saleData.document_type || 'Boleta',
+      branchName: saleData.branch_name || activeBranch?.name || 'Sucursal',
+      isWebOrder: !!saleData.isWebOrder,
+      timestamp: Date.now()
+    });
+  }, [companyName, activeBranch?.name, formatCurrency]);
+
+  const dismissSaleAlert = useCallback(() => {
+    setLatestSaleAlert(null);
+  }, []);
 
   const syncExchangeRate = async () => {
     const { exchange_rate_source } = companySettings;
@@ -3522,6 +3594,18 @@ export const PuntoNexusProvider = ({ children }) => {
           sale: syncedSale
         };
 
+        // Disparar alerta sobresaliente y sonido de venta
+        triggerSaleAlert({
+          id: saleIdStr,
+          total: finalSellTotal,
+          customer: customerDetails?.customer_name || 'Venta Mostrador',
+          itemsCount: cartItems.length,
+          paymentMethod: paymentMethod,
+          docType: docType,
+          branchName: activeBranch?.name,
+          isWebOrder: false
+        });
+
         setLoading(false);
         return { error: null, sale: syncedSale, is_offline: !dbSale };
       } catch (err) {
@@ -3537,6 +3621,17 @@ export const PuntoNexusProvider = ({ children }) => {
         const updatedBranchSales = [localOfflineSale, ...activeBranchSales];
         setSales(updatedBranchSales);
         persistLocalSales(updatedBranchSales);
+
+        triggerSaleAlert({
+          id: generatedSaleId,
+          total: finalSellTotal,
+          customer: customerDetails?.customer_name || 'Venta Mostrador (Offline)',
+          itemsCount: cartItems.length,
+          paymentMethod: paymentMethod,
+          docType: docType,
+          branchName: activeBranch?.name,
+          isWebOrder: false
+        });
 
         setLoading(false);
         return { error: null, sale: localOfflineSale, is_offline: true };
@@ -3913,6 +4008,17 @@ export const PuntoNexusProvider = ({ children }) => {
         console.warn("Aviso al registrar pedido web en Supabase:", err);
       }
     }
+
+    triggerSaleAlert({
+      id: code,
+      total: newOrder.total_amount,
+      customer: newOrder.customer_name || 'Cliente Web / QR',
+      itemsCount: formattedItems.length,
+      paymentMethod: newOrder.order_type === 'delivery' ? 'Delivery' : 'Retiro en Tienda',
+      docType: 'Pedido Web',
+      branchName: newOrder.branch_name,
+      isWebOrder: true
+    });
 
     return { code, order: newOrder, error: null };
   };
@@ -5352,6 +5458,9 @@ export const PuntoNexusProvider = ({ children }) => {
     createAccount,
     selectCompany,
     isNexusOwner,
+    latestSaleAlert,
+    triggerSaleAlert,
+    dismissSaleAlert,
     updateUserProfile,
     branches,
     activeBranchId,

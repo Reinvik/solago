@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { supabase } from '../utils/supabaseClient';
-import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator, BellRing } from 'lucide-react';
 import ExchangeRateChart from './ExchangeRateChart';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
-import { isSoundEnabled, setSoundEnabled, playSound } from '../utils/soundEffects';
+import { isSoundEnabled, setSoundEnabled, playSound, requestNotificationPermission, showNativeSaleNotification } from '../utils/soundEffects';
 
 const GIROS_COMERCIALES = [
   { 
@@ -93,7 +93,8 @@ export default function Settings({ onOpenProfileModal }) {
     addBranch,
     fixedCosts = {},
     updateFixedCosts,
-    formatCurrency
+    formatCurrency,
+    triggerSaleAlert
   } = usePuntoNexus();
 
   const currentGiro = companySettings.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
@@ -1734,6 +1735,65 @@ export default function Settings({ onOpenProfileModal }) {
                   🔊 Probar Sonido
                 </button>
               )}
+            </div>
+
+            {/* Control de Alerta Sobresaliente de Ventas y Ruido */}
+            <div style={{ background: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '14px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BellRing size={18} style={{ color: '#10b981' }} />
+                  <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>Alerta Sobresaliente de Ventas</span>
+                </div>
+                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#059669', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 8px', borderRadius: '12px' }}>
+                  Activa
+                </span>
+              </div>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 10px 0', lineHeight: '1.5' }}>
+                Emite un sonido de caja registradora ("cha-ching") y despliega un banner flotante destacado con los datos de la venta o pedido web/QR al instante.
+              </p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (triggerSaleAlert) {
+                      triggerSaleAlert({
+                        id: 'test-' + Date.now(),
+                        total: 18500,
+                        customer: 'Cliente Prueba (Alerta)',
+                        itemsCount: 2,
+                        paymentMethod: 'Transferencia',
+                        docType: 'Boleta',
+                        branchName: 'Sede Principal',
+                        isWebOrder: false
+                      });
+                    }
+                  }}
+                  style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', color: '#059669', padding: '5px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <BellRing size={13} />
+                  <span>Probar Alerta y Sonido</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const perm = await requestNotificationPermission();
+                    if (perm === 'granted') {
+                      showNativeSaleNotification('🔔 ¡Notificaciones de Ventas Habilitadas!', {
+                        body: 'SoLago te avisará con sonido y aviso emergente cuando entre un cobro.'
+                      });
+                      alert('✅ Notificaciones de escritorio / móvil permitidas con éxito.');
+                    } else if (perm === 'denied') {
+                      alert('⚠️ Las notificaciones están bloqueadas en tu navegador. Puedes habilitarlas en el icono de candado de la barra de direcciones.');
+                    } else {
+                      alert('Aviso: Tu navegador no soporta notificaciones push en este entorno.');
+                    }
+                  }}
+                  style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', padding: '5px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Habilitar en Windows / Móvil
+                </button>
+              </div>
             </div>
 
             {/* Teléfono WhatsApp para Cierres de Turno */}

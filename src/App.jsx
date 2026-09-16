@@ -13,10 +13,11 @@ import TablesModule from './components/TablesModule';
 import FinanceModule from './components/FinanceModule';
 import BranchesControl from './components/BranchesControl';
 import ErrorBoundary from './components/ErrorBoundary';
+import SaleAlertBanner from './components/SaleAlertBanner';
 import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight, Store, RotateCw } from 'lucide-react';
 
 function AppContent() {
-  const { user, companyId, companyName, selectCompany, getAllCompanies, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate, isNexusOwner: contextIsNexusOwner } = usePuntoNexus();
+  const { user, companyId, companyName, selectCompany, getAllCompanies, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate, isNexusOwner: contextIsNexusOwner, latestSaleAlert, dismissSaleAlert, formatCurrency } = usePuntoNexus();
   const VALID_TABS = useMemo(() => [
     'dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'
   ], []);
@@ -1014,6 +1015,14 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* Notificación Sobresaliente de Ventas y Pedidos Web */}
+      <SaleAlertBanner
+        alert={latestSaleAlert}
+        onClose={dismissSaleAlert}
+        onNavigate={setActiveTab}
+        formatCurrency={formatCurrency}
+      />
 
     </div>
   );
