@@ -4143,6 +4143,39 @@ export const PuntoNexusProvider = ({ children }) => {
     return { success: true, order: cancelledOrder };
   };
 
+  const updateWebOrder = async (orderId, updates = {}) => {
+    const order = webOrders.find(o => o.id === orderId || o.ticket_code === orderId);
+    if (!order) return { error: 'Pedido no encontrado.' };
+
+    const updatedOrder = {
+      ...order,
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    setWebOrders(prev => prev.map(o => (o.id === orderId || o.ticket_code === orderId) ? updatedOrder : o));
+
+    try {
+      const currentLocal = JSON.parse(localStorage.getItem(`punto_nexus_web_orders_${companyId || 'default'}`) || '[]');
+      const updatedLocal = currentLocal.map(o => (o.id === orderId || o.ticket_code === orderId) ? updatedOrder : o);
+      localStorage.setItem(`punto_nexus_web_orders_${companyId || 'default'}`, JSON.stringify(updatedLocal));
+    } catch (e) {}
+
+    if (isUUID(companyId)) {
+      try {
+        await supabase
+          .from('punto_nexus_shared_carts')
+          .update({ items: updatedOrder })
+          .eq('id', order.id)
+          .eq('company_id', companyId);
+      } catch (err) {
+        console.warn("Aviso actualizando pedido editado en Supabase:", err);
+      }
+    }
+
+    return { success: true, order: updatedOrder };
+  };
+
   useEffect(() => {
     if (!companyId) return;
     fetchWebOrders();
@@ -5456,6 +5489,7 @@ export const PuntoNexusProvider = ({ children }) => {
     createWebOrder,
     confirmWebOrder,
     cancelWebOrder,
+    updateWebOrder,
     getAllCompanies,
     createCompany,
     createAccount,

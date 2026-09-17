@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePuntoNexus, isNexusOwnerAccount } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
+import EditOrderCartModal from './EditOrderCartModal';
 import { 
   Search, 
   ShoppingBag, 
@@ -84,7 +85,8 @@ export default function Showcase({ isPublicView = false }) {
     fetchWebOrders,
     createWebOrder,
     confirmWebOrder,
-    cancelWebOrder
+    cancelWebOrder,
+    updateWebOrder
   } = usePuntoNexus();
 
   // Giro Comercial y modalidades adaptativas
@@ -164,6 +166,7 @@ export default function Showcase({ isPublicView = false }) {
   const [orderFilter, setOrderFilter] = useState('pending'); // 'all' | 'pending' | 'confirmed' | 'cancelled'
   const [orderSearch, setOrderSearch] = useState('');
   const [confirmingOrder, setConfirmingOrder] = useState(null);
+  const [editingOrderCart, setEditingOrderCart] = useState(null);
   const [confirmPaymentMethod, setConfirmPaymentMethod] = useState('Pago Móvil');
   const [confirmDocType, setConfirmDocType] = useState('Boleta');
   const [confirmReference, setConfirmReference] = useState('');
@@ -1456,8 +1459,33 @@ export default function Showcase({ isPublicView = false }) {
 
                       {/* Columna Derecha: Productos */}
                       <div>
-                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
-                          🛍️ Artículos Solicitados ({itemsList.length})
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            🛍️ Artículos Solicitados ({itemsList.length})
+                          </div>
+                          {isPending && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrderCart(order)}
+                              style={{
+                                background: 'rgba(2, 132, 199, 0.08)',
+                                border: '1px solid rgba(2, 132, 199, 0.25)',
+                                color: '#0284c7',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Modificar productos del pedido"
+                            >
+                              <Edit3 size={12} />
+                              <span>Editar Carrito</span>
+                            </button>
+                          )}
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', maxHeight: '180px', overflowY: 'auto' }}>
@@ -1545,6 +1573,28 @@ export default function Showcase({ isPublicView = false }) {
                           }}
                         >
                           ❌ Rechazar Pedido
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingOrderCart(order)}
+                          style={{
+                            padding: '9px 16px',
+                            borderRadius: '10px',
+                            border: '1px solid #bae6fd',
+                            background: '#f0f9ff',
+                            color: '#0284c7',
+                            fontSize: '12.5px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Edit3 size={15} />
+                          <span>Modificar Pedido</span>
                         </button>
 
                         <button
@@ -4335,6 +4385,28 @@ export default function Showcase({ isPublicView = false }) {
         </div>
       );
     })()}
+
+      {/* ========================================================================= */}
+      {/* ✏️ MODAL PARA EDITAR CARRITO / PRODUCTOS DEL PEDIDO (NK-019) ✏️ */}
+      {/* ========================================================================= */}
+      <EditOrderCartModal
+        isOpen={Boolean(editingOrderCart)}
+        onClose={() => setEditingOrderCart(null)}
+        order={editingOrderCart}
+        inventory={inventory}
+        companySettings={companySettings}
+        onSaveOrder={async (orderId, updates) => {
+          if (updateWebOrder) {
+            return await updateWebOrder(orderId, updates);
+          }
+        }}
+        onConfirmOrder={(ord) => {
+          setConfirmingOrder(ord);
+          setConfirmPaymentMethod('Pago Móvil');
+          setConfirmDocType('Boleta');
+          setConfirmReference('');
+        }}
+      />
 
       {/* ========================================================================= */}
       {/* 💳 MODAL DE CONFIRMACIÓN DE PAGO Y DESCUENTO DE STOCK 💳 */}
