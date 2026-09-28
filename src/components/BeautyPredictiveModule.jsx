@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { 
-  Sparkles, Scissors, Crown, Users, Calendar, Clock, MessageSquare, AlertTriangle, 
+  Scissors, Crown, Users, Calendar, Clock, MessageSquare, AlertTriangle, 
   CheckCircle2, Plus, Search, Filter, RefreshCw, ShieldAlert, Award, TrendingUp, 
-  DollarSign, Package, ChevronRight, Zap, Check, X, Phone, UserCheck, Flame, HeartHandshake, Eye
+  DollarSign, Package, ChevronRight, Zap, Check, X, Phone, UserCheck, Flame, HeartHandshake, Eye, Sparkles
 } from 'lucide-react';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { playSound } from '../utils/soundEffects';
 import { cleanWhatsAppNumber } from '../utils/shiftExport';
 
-// Presets demo inspirados en Youzan Meiye para barberías y salones de alta rotación
+// Presets demo para barberías y salones de alta rotación (Chile y Venezuela)
 const DEFAULT_BEAUTY_CLIENTS = [
   {
     id: 'cli-1',
@@ -59,24 +59,24 @@ const DEFAULT_BEAUTY_CLIENTS = [
   },
   {
     id: 'cli-4',
-    name: 'Alejandro Ramos',
-    phone: '+584249876543',
-    service: 'Corte Clásico & Lavado Spa',
+    name: 'Ignacio Rojas',
+    phone: '+56976543210',
+    service: 'Corte Clásico Ejecutivo & Peinado',
     stylist: 'Carlos Master Barber',
-    lastVisit: '2026-09-24', // Hace 3 días (Reciente)
-    cycleDays: 20,
-    notes: 'Peinado hacia el lado, tijera en la parte superior',
-    totalVisits: 3,
+    lastVisit: '2026-09-24', // Hace 3 días (Al día)
+    cycleDays: 25,
+    notes: 'Peinado con cera mate, cliente prefiere café expreso',
+    totalVisits: 11,
     activePass: null
   },
   {
     id: 'cli-5',
-    name: 'Daniela Morales',
-    phone: '+56977889900',
-    service: 'Alisado Keratina Brasileña & Botox',
+    name: 'Valeria Mendoza',
+    phone: '+584241234567',
+    service: 'Alisado Keratina Brasileña',
     stylist: 'Valentina Colorista',
-    lastVisit: '2026-07-20', // Hace 69 días (Ventana ideal para retoque)
-    cycleDays: 75,
+    lastVisit: '2026-07-20', // Muy atrasada (Riesgo alto)
+    cycleDays: 60,
     notes: 'Cabello con frizz moderado, necesita secador caliente para activación',
     totalVisits: 4,
     activePass: null
@@ -90,10 +90,10 @@ const DEFAULT_MEMBERSHIP_PLANS = [
     category: 'Barbería',
     service: 'Corte Fade / Clásico',
     sessions: 4,
-    regularPrice: 60000,
-    prepaidPrice: 45000,
+    regularPrice: 60,
+    prepaidPrice: 45,
     validityDays: 30,
-    description: 'En vez de pagar $15.000 por corte suelto, el cliente compra 4 cortes por $45.000. Flujo garantizado por adelantado.',
+    description: 'Pase mensual de 4 sesiones con tarifa preferencial prepago. Flujo de caja garantizado por adelantado.',
     popular: true
   },
   {
@@ -102,10 +102,10 @@ const DEFAULT_MEMBERSHIP_PLANS = [
     category: 'Barbería',
     service: 'Corte + Barba + Toalla Caliente',
     sessions: 3,
-    regularPrice: 48000,
-    prepaidPrice: 38000,
+    regularPrice: 48,
+    prepaidPrice: 38,
     validityDays: 45,
-    description: 'Pack completo para el cuidado masculino recurrente con toalla caliente y perfilado.',
+    description: 'Pack completo para el cuidado masculino recurrente con toalla caliente y perfilado de barba.',
     popular: false
   },
   {
@@ -114,8 +114,8 @@ const DEFAULT_MEMBERSHIP_PLANS = [
     category: 'Salón de Belleza',
     service: 'Coloración / Balayage / Matiz',
     sessions: 3,
-    regularPrice: 120000,
-    prepaidPrice: 95000,
+    regularPrice: 120,
+    prepaidPrice: 95,
     validityDays: 90,
     description: 'Mantenimiento de color, nutrición profunda y matiz para rubios y morenas iluminadas.',
     popular: true
@@ -126,10 +126,10 @@ const DEFAULT_MEMBERSHIP_PLANS = [
     category: 'Nails & Estética',
     service: 'Manicura Rusa',
     sessions: 4,
-    regularPrice: 56000,
-    prepaidPrice: 42000,
+    regularPrice: 56,
+    prepaidPrice: 42,
     validityDays: 60,
-    description: 'Uñas impecables durante todo el mes con retiro y esmaltado incluido.',
+    description: 'Uñas impecables durante todo el mes con retiro cuidadoso y esmaltado de alta durabilidad.',
     popular: false
   }
 ];
@@ -140,38 +140,41 @@ const DEFAULT_TECHNICAL_RECIPES = [
     service: 'Balayage / Decoloración Completa',
     category: 'Coloración',
     supplies: [
-      { name: 'Polvo Decolorante Premium', standardAmount: 60, unit: 'g' },
-      { name: 'Oxidante 20 Volúmenes', standardAmount: 90, unit: 'ml' },
-      { name: 'Tratamiento Plex Protector', standardAmount: 20, unit: 'ml' }
-    ]
+      { name: 'Polvo Decolorante Blond Studio', standardAmount: 60, unit: 'g' },
+      { name: 'Oxidante en Crema 20 Vol', standardAmount: 120, unit: 'ml' },
+      { name: 'Matizador Rubio Cenizo', standardAmount: 30, unit: 'g' }
+    ],
+    notes: 'Mezcla 1:2 para decoloración libre con papel aluminio térmico.'
   },
   {
     id: 'rec-2',
-    service: 'Coloración Global Tubo 1:1',
+    service: 'Coloración Raíz / Cubrimiento de Canas',
     category: 'Coloración',
     supplies: [
-      { name: 'Tinte Profesional Tubo 60g', standardAmount: 60, unit: 'g' },
-      { name: 'Oxidante 20 Volúmenes', standardAmount: 60, unit: 'ml' }
-    ]
+      { name: 'Tubo Tinte Profesional', standardAmount: 45, unit: 'g' },
+      { name: 'Oxidante en Crema 20 Vol', standardAmount: 45, unit: 'ml' }
+    ],
+    notes: 'Proporción 1:1 exacta para garantizar cobertura del 100% de canas.'
   },
   {
     id: 'rec-3',
-    service: 'Alisado Keratina Brasileña',
+    service: 'Alisado Keratina Termoactiva',
     category: 'Tratamientos',
     supplies: [
-      { name: 'Crema Alisadora Keratina', standardAmount: 75, unit: 'ml' },
-      { name: 'Shampoo Anti-residuos', standardAmount: 30, unit: 'ml' }
-    ]
+      { name: 'Crema Alisadora Keratina Pro', standardAmount: 75, unit: 'ml' }
+    ],
+    notes: 'Aplicar a 1 cm de la raíz, peinar fino y secar con brushing antes de planchar.'
   },
   {
     id: 'rec-4',
-    service: 'Afeitado Toalla Caliente & Barba',
+    service: 'Ritual Barba & Afeitado Clásico',
     category: 'Barbería',
     supplies: [
-      { name: 'Aceite Pre-Shave Esencial', standardAmount: 10, unit: 'ml' },
-      { name: 'Espuma / Gel de Afeitar', standardAmount: 25, unit: 'ml' },
-      { name: 'Hoja de Navaja Platinum', standardAmount: 1, unit: 'unidades' }
-    ]
+      { name: 'Aceite Pre-Afeitado Hidratante', standardAmount: 5, unit: 'ml' },
+      { name: 'Espuma / Crema de Afeitar', standardAmount: 15, unit: 'g' },
+      { name: 'Bálsamo Post-Afeitado Aftershave', standardAmount: 8, unit: 'ml' }
+    ],
+    notes: 'Toalla caliente a 45°C durante 3 minutos antes de iniciar con navaja descartable.'
   }
 ];
 
@@ -180,10 +183,10 @@ const DEFAULT_STYLISTS = [
     id: 'sty-1',
     name: 'Carlos Mendoza',
     nickname: 'Carlos Master Barber',
-    specialty: 'Barbería & Degradés',
+    specialty: 'Cortes Fade, Diseños & Barba',
     commissionPct: 50,
     monthlyServices: 84,
-    retainedClientsCount: 42,
+    retainedClientsCount: 46,
     efficiencyScore: 98
   },
   {
@@ -223,6 +226,19 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'golden' | 'risk' | 'recent' | 'passes'
 
+  // Moneda y normalización de precios (Chile CLP vs Venezuela / USD)
+  const isChileanPesos = (companySettings?.country === 'CL' || companySettings?.currency_code === 'CLP') && !companySettings?.use_usd_pricing;
+  
+  const normalizePrice = (val) => {
+    const n = Number(val) || 0;
+    if (isChileanPesos) {
+      return n < 500 ? n * 1000 : n;
+    } else {
+      // USD base (Venezuela o tiendas con multidivisa activa)
+      return n >= 500 ? Math.round(n / 1000) : n;
+    }
+  };
+
   // Persistencia de Clientes y Ciclos
   const clientsStorageKey = `punto_nexus_beauty_clients_${companyId || 'default'}`;
   const [clients, setClients] = useState(() => {
@@ -234,7 +250,13 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
   const plansStorageKey = `punto_nexus_beauty_plans_${companyId || 'default'}`;
   const [plans, setPlans] = useState(() => {
     const saved = localStorage.getItem(plansStorageKey);
-    return saved ? JSON.parse(saved) : DEFAULT_MEMBERSHIP_PLANS;
+    const initial = saved ? JSON.parse(saved) : DEFAULT_MEMBERSHIP_PLANS;
+    // Normalizar precios guardados para evitar importes descalibrados
+    return initial.map(p => ({
+      ...p,
+      regularPrice: normalizePrice(p.regularPrice),
+      prepaidPrice: normalizePrice(p.prepaidPrice)
+    }));
   });
 
   // Persistencia de Recetas Técnicas
@@ -279,15 +301,16 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     localStorage.setItem(suppliesLogKey, JSON.stringify(suppliesLog));
   }, [suppliesLog, suppliesLogKey]);
 
-  // Modales
+  // Estados de Modales
   const [showAddClientModal, setShowAddClientModal] = useState(false);
+  const [showSellPassModal, setShowSellPassModal] = useState(null); // client object
+  const [showRedeemPassModal, setShowRedeemPassModal] = useState(null); // client object
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
-  const [showSellPassModal, setShowSellPassModal] = useState(null); // client or null
-  const [showRedeemPassModal, setShowRedeemPassModal] = useState(null); // client or null
   const [showRecordSupplyModal, setShowRecordSupplyModal] = useState(false);
+  const [showAddRecipeModal, setShowAddRecipeModal] = useState(false);
   const [showAddStylistModal, setShowAddStylistModal] = useState(false);
 
-  // Estados de Formularios
+  // Formulario Nuevo Cliente
   const [clientForm, setClientForm] = useState({
     name: '',
     phone: '',
@@ -298,15 +321,17 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     notes: ''
   });
 
-  const [planForm, setPlanForm] = useState({
+  // Formulario Nuevo Plan
+  const [newPlanForm, setNewPlanForm] = useState({
     name: '',
     category: 'Barbería',
-    service: 'Corte de Cabello',
+    service: 'Corte Fade / Degradé',
     sessions: 4,
-    regularPrice: 60000,
-    prepaidPrice: 45000,
+    regularPrice: isChileanPesos ? 60000 : 60,
+    prepaidPrice: isChileanPesos ? 45000 : 45,
     validityDays: 30,
-    description: ''
+    description: 'Pase prepago de sesiones con descuento por adelantado.',
+    popular: false
   });
 
   const [selectedPlanForClient, setSelectedPlanForClient] = useState('');
@@ -320,7 +345,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     actualAmountUsed: ''
   });
 
-  // Helper para calcular días transcurridos y estado del semáforo Youzan
+  // Helper para calcular días transcurridos y estado del semáforo predictivo
   const getClientCycleStatus = (client) => {
     if (!client.lastVisit) return { daysAgo: 999, status: 'risk', statusLabel: 'Sin registro', badgeColor: '#ef4444' };
     const lastDate = new Date(client.lastVisit);
@@ -329,7 +354,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const cycle = Number(client.cycleDays || 30);
 
-    // Ventana Dorada Youzan Meiye: cuando faltan 4 días para el ciclo o pasaron hasta 5 días después
+    // Ventana Dorada: cuando faltan 4 días para el ciclo o pasaron hasta 5 días después
     const goldenStart = cycle - 4;
     const goldenEnd = cycle + 5;
 
@@ -365,44 +390,44 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         daysAgo,
         cycle,
         status: 'recent',
-        statusLabel: '⚪ Al día / Atendido reciente',
+        statusLabel: '⚪ Al Día / Visita Reciente',
         badgeColor: '#64748b',
         urgency: 'low'
       };
     }
   };
 
-  // Generador de Mensaje IA Personalizado para WhatsApp
-  const generateWhatsAppPredictiveMessage = (client) => {
+  // Generador de Mensaje Hiperpersonalizado para WhatsApp
+  const handleSendWhatsAppReminder = (client) => {
+    playSound('click');
     const cycleInfo = getClientCycleStatus(client);
-    const comp = companyName || 'SoLago Barber & Beauty';
-    const clientName = client.name || 'Cliente';
-    const serviceName = client.service || 'tu servicio de belleza';
-    const stylistName = client.stylist || 'tu estilista habitual';
-    const weeksAgo = Math.max(1, Math.round(cycleInfo.daysAgo / 7));
-
-    if (cycleInfo.status === 'risk') {
-      return `¡Hola ${clientName}! ✨ Te extrañamos mucho en ${comp}. Han pasado ${weeksAgo} semanas desde tu último ${serviceName}. Queremos consentirte: si agendas tu hora esta semana con ${stylistName}, tienes un tratamiento de hidratación profunda o perfilado de cortesía 🎁. ¿Qué día y horario te acomoda más? 💇‍♀️`;
-    }
-
-    if (client.service?.toLowerCase().includes('corte') || client.service?.toLowerCase().includes('barba')) {
-      return `¡Hola ${clientName}! ✂️ Han pasado ${cycleInfo.daysAgo} días desde tu último ${serviceName} con ${stylistName} en ${comp}. Para mantener tu degradé y estilo impecable, tenemos cupos disponibles esta semana. ¿Te reservo tu horario habitual? ¡Saludos! 💈`;
-    }
-
-    return `¡Hola ${clientName}! ✨ Han pasado ${weeksAgo} semanas desde tu último ${serviceName} con ${stylistName} en ${comp}. ¡Es el momento perfecto para retocar y mantener el brillo y salud de tu cabello! Te guardamos un espacio preferencial este jueves o viernes. ¿Deseas que te reservemos tu hora? 💖`;
-  };
-
-  // Enviar mensaje directo por WhatsApp
-  const handleSendWhatsAppPredictive = (client) => {
-    const msg = generateWhatsAppPredictiveMessage(client);
+    const compName = companyName || 'nuestro salón';
     const cleanPhone = cleanWhatsAppNumber(client.phone, companySettings?.country || 'VE');
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+
+    let customGreeting = `¡Hola ${client.name}! ✂️`;
+    let body = '';
+
+    if (cycleInfo.status === 'golden') {
+      const weeksAgo = Math.max(1, Math.round(cycleInfo.daysAgo / 7));
+      body = `Han pasado unas ${weeksAgo} semanas desde tu último servicio de *${client.service}* en ${compName}.\n\nTe escribimos para comentarte que *${client.stylist || 'tu estilista habitual'}* tiene un espacio preferencial guardado para ti esta semana.\n\n¿Te gustaría que te reservemos tu cupo preferencial?`;
+    } else if (cycleInfo.status === 'risk') {
+      body = `¡Te extrañamos en ${compName}! Notamos que hace tiempo no nos visitas para tu *${client.service}* con *${client.stylist}*.\n\nQueremos regalarte una atención especial o bebida de cortesía en tu próxima cita si reservas esta semana. ¿Qué día te acomoda mejor?`;
+    } else {
+      body = `Esperamos que estés disfrutando tu último servicio de *${client.service}*. Recuerda que si necesitas mantenimiento o retocar con *${client.stylist}*, estamos a tu total disposición en ${compName}. ¡Que tengas un excelente día!`;
+    }
+
+    if (client.activePass && client.activePass.remainingSessions > 0) {
+      body += `\n\n🎟️ *Recordatorio VIP:* Tienes *${client.activePass.remainingSessions} sesiones activas* disponibles en tu ${client.activePass.planName}. ¡Aprovéchalas cuando gustes!`;
+    }
+
+    const fullMessage = `${customGreeting}\n\n${body}`;
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(fullMessage)}`;
     window.open(url, '_blank');
   };
 
-  // Marcar visita atendida hoy (resetea el ciclo)
+  // Registrar visita hoy (reinicia el ciclo)
   const handleMarkVisitToday = (clientId) => {
-    playSound('payment');
+    playSound('cash');
     const todayStr = new Date().toISOString().split('T')[0];
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
@@ -461,62 +486,56 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     if (!plan) return;
 
     playSound('payment');
-    const client = showSellPassModal;
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + (plan.validityDays || 30));
-    const expiryStr = expiryDate.toISOString().split('T')[0];
-
-    const newPass = {
-      planName: plan.name,
-      totalSessions: plan.sessions,
-      remainingSessions: plan.sessions,
-      expiresAt: expiryStr,
-      boughtAt: new Date().toISOString().split('T')[0],
-      price: plan.prepaidPrice
-    };
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + (Number(plan.validityDays) || 30));
+    const expireStr = expireDate.toISOString().split('T')[0];
 
     setClients(prev => prev.map(c => {
-      if (c.id === client.id) {
+      if (c.id === showSellPassModal.id) {
         return {
           ...c,
-          activePass: newPass
+          activePass: {
+            planId: plan.id,
+            planName: plan.name,
+            totalSessions: plan.sessions,
+            remainingSessions: plan.sessions,
+            purchasedAt: new Date().toISOString().split('T')[0],
+            expiresAt: expireStr
+          }
         };
       }
       return c;
     }));
 
-    setShowSellPassModal(null);
-    setSelectedPlanForClient('');
-
-    const cleanPhone = cleanWhatsAppNumber(client.phone, companySettings?.country || 'VE');
+    const cleanPhone = cleanWhatsAppNumber(showSellPassModal.phone, companySettings?.country || 'VE');
     const comp = companyName || 'SoLago';
-    const welcomeMsg = `🎉 ¡Felicitaciones ${client.name}! Has activado tu *${plan.name}* en ${comp}.\n\n🎟️ *Sesiones prepagadas:* ${plan.sessions} sesiones\n📅 *Válido hasta:* ${expiryStr}\n💰 *Ahorro total:* Prepago exclusivo activado.\n\n¡Te esperamos en tu próxima visita!`;
+    const welcomeMsg = `¡Felicidades ${showSellPassModal.name}! 🌟 Has adquirido tu membresía *${plan.name}* en ${comp}.\n\n🎟️ Tienes *${plan.sessions} sesiones disponibles* con validez hasta el ${expireStr}.\n¡Muchas gracias por asegurar tu cuidado recurrente con nosotros!`;
     const shareUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(welcomeMsg)}`;
 
-    if (window.confirm(`✅ Membresía "${plan.name}" activada para ${client.name}.\n\n¿Deseas enviar la tarjeta digital de bienvenida por WhatsApp al cliente?`)) {
+    setShowSellPassModal(null);
+    if (window.confirm(`✅ Membresía "${plan.name}" vendida y activada con éxito para ${showSellPassModal.name}.\n\n¿Deseas enviar el recibo de membresía por WhatsApp?`)) {
       window.open(shareUrl, '_blank');
     }
   };
 
-  // Registrar consumo de insumo por profesional con cálculo de sobregasto
+  // Registro de consumo real de insumos comparado contra receta
   const handleRecordSupplyUsage = (e) => {
     e.preventDefault();
-    if (!supplyForm.actualAmountUsed || isNaN(Number(supplyForm.actualAmountUsed))) {
-      alert("Por favor ingresa la cantidad utilizada.");
-      return;
-    }
-
     const recipe = recipes.find(r => r.id === supplyForm.serviceRecipeId);
     if (!recipe) return;
 
-    const usedVal = Number(supplyForm.actualAmountUsed);
+    const usedVal = Number(supplyForm.actualAmountUsed) || 0;
     const standardMainSupply = recipe.supplies[0];
-    const stdVal = standardMainSupply?.standardAmount || 60;
-    const deviationPct = Math.round(((usedVal - stdVal) / stdVal) * 100);
+    const stdVal = Number(standardMainSupply?.standardAmount) || 0;
+
+    let deviationPct = 0;
+    if (stdVal > 0) {
+      deviationPct = Math.round(((usedVal - stdVal) / stdVal) * 100);
+    }
 
     const logEntry = {
-      id: 'log-' + Date.now(),
-      date: new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }),
+      id: 'sup-' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
       stylist: supplyForm.stylist,
       service: recipe.service,
       clientName: supplyForm.clientName || 'Cliente Salón',
@@ -545,7 +564,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
     }
   };
 
-  // Métricas Youzan Meiye para la cabecera
+  // Métricas predictivas para la cabecera
   const predictiveMetrics = useMemo(() => {
     let goldenCount = 0;
     let riskCount = 0;
@@ -557,7 +576,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
       if (cycleInfo.status === 'golden') goldenCount++;
       if (cycleInfo.status === 'risk') {
         riskCount++;
-        estimatedRevenueToRecover += 25000; // Estimación promedio por servicio
+        estimatedRevenueToRecover += (isChileanPesos ? 25000 : 25);
       }
       if (c.activePass && c.activePass.remainingSessions > 0) totalWithPass++;
     });
@@ -569,7 +588,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
       estimatedRevenueToRecover,
       totalClients: clients.length
     };
-  }, [clients]);
+  }, [clients, isChileanPesos]);
 
   // Clientes filtrados
   const filteredClients = useMemo(() => {
@@ -592,50 +611,76 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: '22px', maxWidth: '1200px', margin: '0 auto' }}>
       
-      {/* ─── CABECERA PREMIUM YOUZAN MEIYE ─── */}
-      <div className="glass-panel" style={{
-        padding: '24px',
-        background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
-        border: '1px solid rgba(236, 72, 153, 0.25)',
-        borderRadius: '20px',
+      {/* ─── HERO BANNER EXECUTIVE (ESTILO BARBERÍA & SALÓN VIP) ─── */}
+      <div style={{
+        padding: '24px 28px',
+        background: 'linear-gradient(135deg, #090d16 0%, #0f172a 55%, #1e1b4b 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '16px'
+        gap: '20px',
+        boxShadow: '0 16px 36px -10px rgba(0, 0, 0, 0.45)',
+        position: 'relative',
+        overflow: 'hidden'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Glow sutil de fondo */}
+        <div style={{
+          position: 'absolute',
+          top: '-50%',
+          right: '-10%',
+          width: '320px',
+          height: '320px',
+          background: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, transparent 70%)',
+          pointerEvents: 'none'
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', zIndex: 1 }}>
           <div style={{
-            width: '54px',
-            height: '54px',
+            width: '56px',
+            height: '56px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 50%, #8b5cf6 100%)',
+            background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 50%, #be123c 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#ffffff',
-            boxShadow: '0 8px 20px rgba(236, 72, 153, 0.35)',
+            boxShadow: '0 8px 24px rgba(244, 63, 94, 0.4)',
             flexShrink: 0
           }}>
-            <Scissors size={26} />
+            <Scissors size={28} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', margin: 0, letterSpacing: '-0.02em' }}>
                 Barbería, Salones & Estética Predictiva
               </h2>
-              <span style={{ fontSize: '10.5px', fontWeight: 900, background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#fff', padding: '3px 10px', borderRadius: '99px', letterSpacing: '0.04em' }}>
-                YOUZAN MEIYE (有赞美业)
+              <span style={{
+                fontSize: '10.5px',
+                fontWeight: 900,
+                background: 'rgba(245, 158, 11, 0.15)',
+                color: '#fbbf24',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                padding: '3px 10px',
+                borderRadius: '99px',
+                letterSpacing: '0.05em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <Sparkles size={11} /> SISTEMA PREDICTIVO VIP
               </span>
             </div>
-            <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '4px', margin: 0 }}>
-              Retención predictiva por WhatsApp, pases de membresía prepago garantizados y control de insumos por profesional.
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px', margin: 0, maxWidth: '640px', lineHeight: '1.4' }}>
+              Retención inteligente por WhatsApp, membresías prepago de alta recurrencia y control de insumos por estilista.
             </p>
           </div>
         </div>
 
         {/* Acciones Rápidas */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', zIndex: 1 }}>
           <button
             type="button"
             onClick={() => setShowAddClientModal(true)}
@@ -643,19 +688,20 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '9px 16px',
+              padding: '10px 18px',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
+              background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
               color: '#ffffff',
               border: 'none',
               fontWeight: 800,
               fontSize: '12.5px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)'
+              boxShadow: '0 4px 14px rgba(244, 63, 94, 0.35)',
+              transition: 'transform 0.15s ease'
             }}
           >
-            <Plus size={15} />
-            <span>+ Nuevo Cliente / Ciclo</span>
+            <Plus size={16} />
+            <span>Nuevo Cliente / Ciclo</span>
           </button>
 
           <button
@@ -665,17 +711,18 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '9px 16px',
+              padding: '10px 16px',
               borderRadius: '12px',
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              color: '#f8fafc',
               fontWeight: 800,
               fontSize: '12.5px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
-            <Package size={15} style={{ color: '#ec4899' }} />
+            <Package size={15} style={{ color: '#fb7185' }} />
             <span>Medir Insumos</span>
           </button>
 
@@ -687,34 +734,35 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '9px 16px',
+                padding: '10px 16px',
                 borderRadius: '12px',
-                background: '#f8fafc',
-                border: '1px solid #cbd5e1',
-                color: '#334155',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.28)',
+                color: '#34d399',
                 fontWeight: 800,
                 fontSize: '12.5px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
               title="Ir al Terminal de Punto de Venta"
             >
               <DollarSign size={15} style={{ color: '#10b981' }} />
-              <span>Ir al POS</span>
+              <span>Terminal POS</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* ─── PESTAÑAS DEL MÓDULO ─── */}
+      {/* ─── PESTAÑAS DEL MÓDULO (ESTILO REFINADO) ─── */}
       <div style={{
         display: 'flex',
-        gap: '6px',
+        gap: '8px',
         overflowX: 'auto',
         padding: '6px',
         background: '#ffffff',
-        borderRadius: '16px',
+        borderRadius: '18px',
         border: '1px solid #e2e8f0',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+        boxShadow: '0 4px 14px rgba(15,23,42,0.03)'
       }}>
         {[
           { id: 'predictive', label: '🔮 IA de Recompra Predictiva', badge: `${predictiveMetrics.goldenCount} en ventana` },
@@ -732,15 +780,16 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '10px 16px',
+                padding: '10px 18px',
                 borderRadius: '12px',
-                border: isActive ? '1.5px solid #ec4899' : '1.5px solid transparent',
-                background: isActive ? 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(139,92,246,0.06))' : 'transparent',
-                color: isActive ? '#be185d' : '#64748b',
+                border: 'none',
+                background: isActive ? '#0f172a' : 'transparent',
+                color: isActive ? '#ffffff' : '#64748b',
                 fontWeight: isActive ? 800 : 600,
                 fontSize: '13px',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                boxShadow: isActive ? '0 4px 14px rgba(15,23,42,0.18)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -751,8 +800,9 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   fontWeight: 800,
                   padding: '2px 8px',
                   borderRadius: '99px',
-                  background: isActive ? '#ec4899' : '#f1f5f9',
-                  color: isActive ? '#ffffff' : '#64748b'
+                  background: isActive ? 'rgba(244, 63, 94, 0.25)' : '#f1f5f9',
+                  color: isActive ? '#fda4af' : '#64748b',
+                  border: isActive ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid transparent'
                 }}>
                   {tab.badge}
                 </span>
@@ -770,62 +820,62 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
           
           {/* Tarjetas de Métricas Predictivas */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '18px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', borderLeft: '4px solid #10b981' }}>
+            <div className="glass-panel" style={{ padding: '20px', background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', borderTop: '4px solid #10b981', boxShadow: '0 4px 16px rgba(15,23,42,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>VENTANA DORADA DE CONTACTO</span>
-                <span style={{ padding: '3px 8px', borderRadius: '99px', background: 'rgba(16, 185, 129, 0.12)', color: '#059669', fontSize: '11px', fontWeight: 800 }}>Hoy / Esta Semana</span>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>VENTANA DORADA</span>
+                <span style={{ padding: '3px 8px', borderRadius: '99px', background: 'rgba(16, 185, 129, 0.12)', color: '#059669', fontSize: '11px', fontWeight: 800 }}>Contacto Hoy</span>
               </div>
-              <div style={{ fontSize: '30px', fontWeight: 900, color: '#0f172a', margin: '6px 0 2px 0' }}>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: '#0f172a', margin: '8px 0 4px 0' }}>
                 {predictiveMetrics.goldenCount}
               </div>
-              <p style={{ fontSize: '11.5px', color: '#10b981', fontWeight: 700, margin: 0 }}>
-                Clientes que deben recibir mensaje hoy antes de ir a otro salón
+              <p style={{ fontSize: '12px', color: '#10b981', fontWeight: 700, margin: 0 }}>
+                Clientes que deben recibir mensaje hoy antes de acudir a otro lugar
               </p>
             </div>
 
-            <div className="glass-panel" style={{ padding: '18px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', borderLeft: '4px solid #ef4444' }}>
+            <div className="glass-panel" style={{ padding: '20px', background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', borderTop: '4px solid #ef4444', boxShadow: '0 4px 16px rgba(15,23,42,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>EN RIESGO DE FUGA</span>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>EN RIESGO DE FUGA</span>
                 <span style={{ padding: '3px 8px', borderRadius: '99px', background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', fontSize: '11px', fontWeight: 800 }}>Atraso Crítico</span>
               </div>
-              <div style={{ fontSize: '30px', fontWeight: 900, color: '#dc2626', margin: '6px 0 2px 0' }}>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: '#dc2626', margin: '8px 0 4px 0' }}>
                 {predictiveMetrics.riskCount}
               </div>
-              <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
-                Clientes inactivos que requieren cupón o incentivo de retorno
+              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                Clientes inactivos que requieren incentivo especial de retorno
               </p>
             </div>
 
-            <div className="glass-panel" style={{ padding: '18px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', borderLeft: '4px solid #ec4899' }}>
+            <div className="glass-panel" style={{ padding: '20px', background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', borderTop: '4px solid #f59e0b', boxShadow: '0 4px 16px rgba(15,23,42,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>CON PASES PREPAGO ACTIVOS</span>
-                <Crown size={16} style={{ color: '#ec4899' }} />
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>CON MEMBRESÍA ACTIVA</span>
+                <Crown size={17} style={{ color: '#f59e0b' }} />
               </div>
-              <div style={{ fontSize: '30px', fontWeight: 900, color: '#be185d', margin: '6px 0 2px 0' }}>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: '#d97706', margin: '8px 0 4px 0' }}>
                 {predictiveMetrics.totalWithPass}
               </div>
-              <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
-                Clientes con saldo de sesiones pagadas por adelantado
+              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                Clientes con saldo prepagado garantizado
               </p>
             </div>
 
-            <div className="glass-panel" style={{ padding: '18px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', borderLeft: '4px solid #8b5cf6' }}>
+            <div className="glass-panel" style={{ padding: '20px', background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', borderTop: '4px solid #0f172a', boxShadow: '0 4px 16px rgba(15,23,42,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>TOTAL CLIENTES MONITOREADOS</span>
-                <Users size={16} style={{ color: '#8b5cf6' }} />
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>TOTAL MONITOREADOS</span>
+                <Users size={17} style={{ color: '#0f172a' }} />
               </div>
-              <div style={{ fontSize: '30px', fontWeight: 900, color: '#6d28d9', margin: '6px 0 2px 0' }}>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: '#0f172a', margin: '8px 0 4px 0' }}>
                 {predictiveMetrics.totalClients}
               </div>
-              <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
-                Base de datos con ciclos automáticos por estilista
+              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                Clientes con ciclo predictivo registrado
               </p>
             </div>
           </div>
 
           {/* Barra de Filtros y Búsqueda */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '8px 14px', flex: '1 1 300px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '14px', padding: '10px 16px', flex: '1 1 300px', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
               <Search size={16} style={{ color: '#94a3b8' }} />
               <input
                 type="text"
@@ -849,14 +899,15 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   type="button"
                   onClick={() => setFilterStatus(f.id)}
                   style={{
-                    padding: '7px 14px',
+                    padding: '8px 16px',
                     borderRadius: '99px',
-                    border: filterStatus === f.id ? '1.5px solid #ec4899' : '1px solid #cbd5e1',
-                    background: filterStatus === f.id ? '#ec4899' : '#ffffff',
+                    border: filterStatus === f.id ? '1.5px solid #0f172a' : '1px solid #cbd5e1',
+                    background: filterStatus === f.id ? '#0f172a' : '#ffffff',
                     color: filterStatus === f.id ? '#ffffff' : '#475569',
                     fontSize: '12px',
                     fontWeight: 700,
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   {f.label}
@@ -865,18 +916,18 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
             </div>
           </div>
 
-          {/* Tabla de Clientes con Semáforo Predictivo e IA WhatsApp */}
-          <div className="glass-panel" style={{ background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          {/* Tabla de Clientes & Semáforo */}
+          <div className="glass-panel" style={{ background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15,23,42,0.03)' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     <th style={{ padding: '14px 18px' }}>Cliente / WhatsApp</th>
-                    <th style={{ padding: '14px 18px' }}>Servicio & Estilista</th>
+                    <th style={{ padding: '14px 18px' }}>Servicio & Profesional</th>
                     <th style={{ padding: '14px 18px' }}>Última Visita</th>
-                    <th style={{ padding: '14px 18px' }}>Ciclo & Semáforo Youzan</th>
+                    <th style={{ padding: '14px 18px' }}>Ciclo & Semáforo Predictivo</th>
                     <th style={{ padding: '14px 18px' }}>Membresía / Pase</th>
-                    <th style={{ padding: '14px 18px', textAlign: 'right' }}>Acción Inteligente</th>
+                    <th style={{ padding: '14px 18px', textAlign: 'right' }}>Acción Recomendada</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -901,8 +952,8 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
                           <td style={{ padding: '14px 18px' }}>
                             <div style={{ fontWeight: 700, color: '#334155' }}>{client.service}</div>
-                            <div style={{ fontSize: '11.5px', color: '#ec4899', fontWeight: 700, marginTop: '2px' }}>
-                              💇 {client.stylist}
+                            <div style={{ fontSize: '11.5px', color: '#be123c', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Scissors size={12} /> {client.stylist}
                             </div>
                           </td>
 
@@ -937,8 +988,8 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
                           <td style={{ padding: '14px 18px' }}>
                             {client.activePass ? (
-                              <div style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.2)', padding: '6px 10px', borderRadius: '10px' }}>
-                                <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#be185d' }}>
+                              <div style={{ background: 'rgba(244, 63, 94, 0.06)', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '6px 10px', borderRadius: '10px' }}>
+                                <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#be123c' }}>
                                   {client.activePass.planName}
                                 </div>
                                 <div style={{ fontSize: '11px', fontWeight: 800, color: '#059669', marginTop: '2px' }}>
@@ -956,68 +1007,68 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                                   background: '#f8fafc',
                                   border: '1px dashed #cbd5e1',
                                   color: '#64748b',
-                                  padding: '5px 10px',
+                                  padding: '6px 12px',
                                   borderRadius: '8px',
                                   fontSize: '11px',
-                                  fontWeight: 700,
+                                  fontWeight: 800,
                                   cursor: 'pointer'
                                 }}
                               >
-                                + Vender Pase
+                                + Ofrecer Pase
                               </button>
                             )}
                           </td>
 
                           <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
                               {client.activePass && client.activePass.remainingSessions > 0 && (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setShowRedeemPassModal(client);
-                                    setRedeemStylist(client.stylist || stylists[0]?.name || '');
+                                    setRedeemStylist(client.stylist || stylists[0]?.name);
                                   }}
                                   style={{
-                                    background: '#10b981',
+                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                                     color: '#ffffff',
                                     border: 'none',
-                                    padding: '6px 12px',
+                                    padding: '7px 12px',
                                     borderRadius: '8px',
                                     fontSize: '11.5px',
                                     fontWeight: 800,
                                     cursor: 'pointer',
-                                    display: 'flex',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px'
                                   }}
-                                  title="Canjear y descontar 1 sesión de su membresía"
+                                  title="Canjear y descontar 1 sesión del bono prepago"
                                 >
-                                  <Scissors size={12} />
-                                  <span>Canjear</span>
+                                  <CheckCircle2 size={13} />
+                                  <span>Canjear Sesión</span>
                                 </button>
                               )}
 
                               <button
                                 type="button"
-                                onClick={() => handleSendWhatsAppPredictive(client)}
+                                onClick={() => handleSendWhatsAppReminder(client)}
                                 style={{
-                                  background: '#16a34a',
+                                  background: '#10b981',
                                   color: '#ffffff',
                                   border: 'none',
-                                  padding: '6px 12px',
+                                  padding: '7px 12px',
                                   borderRadius: '8px',
                                   fontSize: '11.5px',
                                   fontWeight: 800,
                                   cursor: 'pointer',
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '5px',
-                                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)'
+                                  gap: '4px',
+                                  boxShadow: '0 2px 6px rgba(16,185,129,0.3)'
                                 }}
-                                title="Abrir WhatsApp con mensaje personalizado de recompra"
+                                title="Enviar mensaje personalizado por WhatsApp"
                               >
                                 <MessageSquare size={13} />
-                                <span>WhatsApp IA</span>
+                                <span>WhatsApp</span>
                               </button>
 
                               <button
@@ -1026,16 +1077,16 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                                 style={{
                                   background: '#f1f5f9',
                                   border: '1px solid #cbd5e1',
-                                  color: '#475569',
-                                  padding: '6px 10px',
+                                  color: '#334155',
+                                  padding: '7px 10px',
                                   borderRadius: '8px',
-                                  fontSize: '11px',
+                                  fontSize: '11.5px',
                                   fontWeight: 700,
                                   cursor: 'pointer'
                                 }}
-                                title="Registrar que vino hoy y reiniciar su ciclo"
+                                title="Registrar que el cliente vino hoy y reiniciar ciclo"
                               >
-                                Atendido Hoy
+                                Vino Hoy
                               </button>
                             </div>
                           </td>
@@ -1051,18 +1102,18 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 💳 SUB-TAB 2: MEMBRESÍAS & PASES PREPAGO                               */}
+      {/* 💳 SUB-TAB 2: PLANES DE MEMBRESÍA PREPAGO                             */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'memberships' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Catálogo de Planes de Membresía Prepago (次卡)
+              <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
+                Catálogo de Planes de Membresía Prepago
               </h3>
-              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '3px', margin: 0 }}>
-                Asegura el flujo de caja cobrando 3, 4 o más sesiones por adelantado con descuento para el cliente.
+              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '4px', margin: 0 }}>
+                Asegura el flujo de caja cobrando 3, 4 o más sesiones por adelantado con tarifa preferencial para el cliente.
               </p>
             </div>
 
@@ -1073,87 +1124,150 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '11px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                background: '#0f172a',
                 color: '#ffffff',
                 border: 'none',
                 fontWeight: 800,
                 fontSize: '12.5px',
                 cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)'
               }}
             >
-              <Plus size={15} />
-              <span>+ Crear Nuevo Plan</span>
+              <Plus size={16} />
+              <span>Crear Nuevo Plan</span>
             </button>
           </div>
 
-          {/* Grid de Planes */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+          {/* Grid de Planes (Diseño Luxury Barber & Salon) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             {plans.map(plan => {
-              const savings = plan.regularPrice - plan.prepaidPrice;
-              const savingsPct = Math.round((savings / plan.regularPrice) * 100);
+              const normRegular = normalizePrice(plan.regularPrice);
+              const normPrepaid = normalizePrice(plan.prepaidPrice);
+              const savings = normRegular - normPrepaid;
+              const savingsPct = normRegular > 0 ? Math.round((savings / normRegular) * 100) : 0;
+              const isBarber = plan.category.toLowerCase().includes('barber');
 
               return (
                 <div 
                   key={plan.id}
                   className="glass-panel"
                   style={{
-                    padding: '22px',
-                    borderRadius: '18px',
+                    padding: '24px',
+                    borderRadius: '20px',
                     background: '#ffffff',
-                    border: plan.popular ? '2px solid #ec4899' : '1px solid #e2e8f0',
-                    boxShadow: plan.popular ? '0 8px 24px rgba(236, 72, 153, 0.15)' : '0 2px 8px rgba(15,23,42,0.03)',
+                    border: plan.popular ? '1.5px solid rgba(244, 63, 94, 0.45)' : '1px solid #e2e8f0',
+                    boxShadow: plan.popular ? '0 12px 30px -4px rgba(244, 63, 94, 0.12)' : '0 4px 16px rgba(15,23,42,0.03)',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    position: 'relative'
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                 >
+                  {/* Línea superior dorada para los más populares */}
                   {plan.popular && (
-                    <span style={{
+                    <div style={{
                       position: 'absolute',
-                      top: '-10px',
-                      right: '20px',
-                      background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
-                      color: '#ffffff',
-                      fontSize: '10px',
-                      fontWeight: 900,
-                      padding: '3px 10px',
-                      borderRadius: '99px',
-                      boxShadow: '0 2px 8px rgba(236,72,153,0.4)',
-                      letterSpacing: '0.04em'
-                    }}>
-                      MÁS POPULAR ⭐
-                    </span>
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: 'linear-gradient(90deg, #f59e0b, #f43f5e, #8b5cf6)'
+                    }} />
                   )}
 
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase' }}>
-                      {plan.category}
+                    {/* Header del Plan */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{
+                        fontSize: '10.5px',
+                        fontWeight: 800,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        background: isBarber ? 'rgba(245, 158, 11, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                        color: isBarber ? '#d97706' : '#be123c',
+                        border: `1px solid ${isBarber ? 'rgba(245, 158, 11, 0.25)' : 'rgba(244, 63, 94, 0.25)'}`
+                      }}>
+                        {isBarber ? '💈 ' : '✂️ '}{plan.category}
+                      </span>
+
+                      {plan.popular && (
+                        <span style={{
+                          fontSize: '10.5px',
+                          fontWeight: 800,
+                          padding: '3px 10px',
+                          borderRadius: '99px',
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #f43f5e 100%)',
+                          color: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          boxShadow: '0 2px 8px rgba(244, 63, 94, 0.3)'
+                        }}>
+                          <Crown size={12} /> MÁS ELEGIDO
+                        </span>
+                      )}
                     </div>
-                    <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: '4px 0 8px 0' }}>
+
+                    <h4 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: '4px 0 8px 0', letterSpacing: '-0.01em' }}>
                       {plan.name}
                     </h4>
-                    <p style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.4', margin: '0 0 14px 0' }}>
+                    <p style={{ fontSize: '12.5px', color: '#64748b', lineHeight: '1.45', margin: '0 0 16px 0' }}>
                       {plan.description}
                     </p>
 
-                    <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '12px', marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: '11px', color: '#94a3b8', textDecoration: 'line-through' }}>
-                          Regular: {formatCurrency(plan.regularPrice)}
+                    {/* Caja de Precio & Ahorro */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11.5px', color: '#94a3b8', textDecoration: 'line-through' }}>
+                          Regular: {formatCurrency(normRegular)}
                         </span>
-                        <span style={{ fontSize: '11px', fontWeight: 800, color: '#10b981' }}>
-                          Ahorra {savingsPct}% ({formatCurrency(savings)})
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          color: '#059669',
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          padding: '2px 8px',
+                          borderRadius: '99px',
+                          border: '1px solid rgba(16, 185, 129, 0.25)'
+                        }}>
+                          Ahorra {savingsPct}%
                         </span>
                       </div>
-                      <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
-                        {formatCurrency(plan.prepaidPrice)}
+
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                        <DualCurrencyDisplay amount={normPrepaid} fontSize="24px" primaryColor="#0f172a" />
                       </div>
-                      <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px' }}>
-                        🎟️ Incluye <strong>{plan.sessions} sesiones</strong> • Válido por {plan.validityDays} días
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#475569', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1' }}>
+                        <Clock size={13} style={{ color: '#ec4899' }} />
+                        <span>Incluye <strong>{plan.sessions} sesiones</strong> • Válido por {plan.validityDays} días</span>
+                      </div>
+                    </div>
+
+                    {/* Beneficios Incluidos */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                        <Check size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+                        <span>{plan.sessions} sesiones garantizadas con tu profesional</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                        <Check size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+                        <span>Saldo debitable y comprobante por WhatsApp</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                        <Check size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+                        <span>Cupo preferencial en agenda</span>
                       </div>
                     </div>
                   </div>
@@ -1166,21 +1280,23 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                     }}
                     style={{
                       width: '100%',
-                      padding: '10px',
-                      borderRadius: '10px',
-                      background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      background: plan.popular ? 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)' : '#0f172a',
                       color: '#ffffff',
                       border: 'none',
                       fontWeight: 800,
-                      fontSize: '12.5px',
+                      fontSize: '13px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px'
+                      gap: '8px',
+                      boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)',
+                      transition: 'all 0.15s ease'
                     }}
                   >
-                    <Crown size={14} />
+                    <Award size={15} style={{ color: '#fbbf24' }} />
                     <span>Asignar / Vender Pase</span>
                   </button>
                 </div>
@@ -1198,69 +1314,101 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Recetas Técnicas & Rendimiento de Insumos (配方与耗材)
+              <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                Recetas Técnicas & Rendimiento de Insumos
               </h3>
-              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '3px', margin: 0 }}>
-                Establece el estándar de gramaje/ml por servicio para evitar fugas de producto y sobrecostos.
+              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '4px', margin: 0 }}>
+                Establece el estándar oficial de gramaje/ml por servicio para evitar mermas de producto y sobrecostos.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowRecordSupplyModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '11px',
-                background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 800,
-                fontSize: '12.5px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)'
-              }}
-            >
-              <Package size={15} />
-              <span>+ Registrar Gasto en Atención</span>
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowRecordSupplyModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                }}
+              >
+                <Plus size={16} />
+                <span>Registrar Consumo en Báscula</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAddRecipeModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Plus size={16} />
+                <span>Nueva Receta Técnica</span>
+              </button>
+            </div>
           </div>
 
-          {/* Grid de Recetas Técnicas Estándar */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {recipes.map(rec => (
-              <div key={rec.id} className="glass-panel" style={{ padding: '20px', borderRadius: '16px', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '11px', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase' }}>
-                  {rec.category}
+          {/* Recetas Técnicas Estándar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
+            {recipes.map(recipe => (
+              <div key={recipe.id} className="glass-panel" style={{ padding: '20px', borderRadius: '18px', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 14px rgba(15,23,42,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '10.5px', fontWeight: 800, background: 'rgba(15,23,42,0.06)', color: '#0f172a', padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
+                    {recipe.category}
+                  </span>
                 </div>
-                <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', margin: '4px 0 12px 0' }}>
-                  {rec.service}
+                <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: '4px 0 10px 0' }}>
+                  {recipe.service}
                 </h4>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {rec.supplies.map((s, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', padding: '6px 10px', background: '#f8fafc', borderRadius: '8px' }}>
-                      <span style={{ color: '#475569' }}>{s.name}</span>
+                
+                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '12px', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Insumos Teóricos Estándar:
+                  </div>
+                  {recipe.supplies.map((s, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', padding: '4px 0', borderBottom: idx < recipe.supplies.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                      <span style={{ color: '#334155', fontWeight: 600 }}>{s.name}</span>
                       <strong style={{ color: '#0f172a' }}>{s.standardAmount} {s.unit}</strong>
                     </div>
                   ))}
                 </div>
+
+                <p style={{ fontSize: '11.5px', color: '#64748b', fontStyle: 'italic', margin: 0 }}>
+                  💡 {recipe.notes}
+                </p>
               </div>
             ))}
           </div>
 
-          {/* Historial de Consumos Registrados */}
-          <div className="glass-panel" style={{ background: '#ffffff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '20px' }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', margin: '0 0 14px 0' }}>
-              Historial de Consumo por Profesional & Desviaciones
+          {/* Historial de Pesajes & Sobrecostos */}
+          <div className="glass-panel" style={{ background: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 18px rgba(15,23,42,0.03)' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: '0 0 14px 0' }}>
+              Historial de Mediciones en Báscula & Desviaciones
             </h4>
 
             {suppliesLog.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '13px' }}>
-                No hay consumos registrados aún. Haz clic en "Medir Insumos" para registrar la primera atención.
+              <div style={{ padding: '28px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
+                Aún no hay mediciones registradas hoy. Los estilistas pueden registrar su pesaje al terminar cada atención.
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -1268,12 +1416,12 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>
                       <th style={{ padding: '10px 14px' }}>Fecha</th>
-                      <th style={{ padding: '10px 14px' }}>Profesional</th>
-                      <th style={{ padding: '10px 14px' }}>Servicio / Cliente</th>
+                      <th style={{ padding: '10px 14px' }}>Estilista / Barbero</th>
+                      <th style={{ padding: '10px 14px' }}>Servicio & Cliente</th>
                       <th style={{ padding: '10px 14px' }}>Insumo</th>
                       <th style={{ padding: '10px 14px' }}>Estándar</th>
-                      <th style={{ padding: '10px 14px' }}>Real Usado</th>
-                      <th style={{ padding: '10px 14px' }}>Desviación</th>
+                      <th style={{ padding: '10px 14px' }}>Consumo Real</th>
+                      <th style={{ padding: '10px 14px' }}>Rendimiento</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1321,10 +1469,10 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
-              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Equipo de Estilistas & Barberos (技师团队)
+              <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                Equipo de Estilistas & Barberos
               </h3>
-              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '3px', margin: 0 }}>
+              <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '4px', margin: 0 }}>
                 Comisiones por servicio, retención de clientes leales y rendimiento por profesional.
               </p>
             </div>
@@ -1336,61 +1484,63 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '11px',
-                background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                background: '#0f172a',
                 color: '#ffffff',
                 border: 'none',
                 fontWeight: 800,
                 fontSize: '12.5px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)'
               }}
             >
-              <Plus size={15} />
-              <span>+ Nuevo Profesional</span>
+              <Plus size={16} />
+              <span>Nuevo Profesional</span>
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
             {stylists.map(sty => (
-              <div key={sty.id} className="glass-panel" style={{ padding: '22px', borderRadius: '18px', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div key={sty.id} className="glass-panel" style={{ padding: '24px', borderRadius: '20px', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15,23,42,0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
                   <div style={{
-                    width: '46px',
-                    height: '46px',
+                    width: '48px',
+                    height: '48px',
                     borderRadius: '14px',
-                    background: 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(139,92,246,0.15))',
-                    color: '#be185d',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+                    color: '#ffffff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 900,
-                    fontSize: '18px'
+                    fontSize: '18px',
+                    boxShadow: '0 4px 12px rgba(15,23,42,0.15)'
                   }}>
                     {sty.name.charAt(0)}
                   </div>
                   <div>
-                    <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', margin: 0 }}>{sty.name}</h4>
-                    <span style={{ fontSize: '11.5px', color: '#ec4899', fontWeight: 700 }}>{sty.specialty}</span>
+                    <h4 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>{sty.name}</h4>
+                    <span style={{ fontSize: '12px', color: '#be123c', fontWeight: 700 }}>{sty.specialty}</span>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '12px', borderRadius: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '14px', borderRadius: '14px' }}>
                   <div>
-                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase' }}>Comisión Base</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>{sty.commissionPct}%</div>
+                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Comisión</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>{sty.commissionPct}%</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase' }}>Clientes Leales</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#10b981' }}>{sty.retainedClientsCount}</div>
+                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Clientes Leales</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#10b981' }}>{sty.retainedClientsCount}</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase' }}>Servicios / Mes</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>{sty.monthlyServices}</div>
+                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Servicios / Mes</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>{sty.monthlyServices}</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase' }}>Eficiencia Insumos</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#8b5cf6' }}>{sty.efficiencyScore}%</div>
+                    <span style={{ fontSize: '10.5px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Eficiencia</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#f59e0b' }}>{sty.efficiencyScore}%</div>
                   </div>
                 </div>
               </div>
@@ -1406,7 +1556,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
           <div className="modal-content glass-panel" style={{ maxWidth: '480px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
                 Registrar Cliente & Ciclo Predictivo
               </h3>
               <button onClick={() => setShowAddClientModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
@@ -1506,6 +1656,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                       value={clientForm.cycleDays}
                       onChange={(e) => setClientForm(prev => ({ ...prev, cycleDays: e.target.value }))}
                     />
+                    <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>Ej: Fade = 15d, Tinte = 35d</span>
                   </div>
                   <div>
                     <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Fecha Última Visita</label>
@@ -1519,11 +1670,11 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Preferencias / Ficha Técnica</label>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Notas Técnicas / Preferencias</label>
                   <textarea
                     rows={2}
                     className="form-input"
-                    placeholder="Ej: Tono cenizo 9.1, no cortar mucho arriba, alérgica al amoníaco..."
+                    placeholder="Tono de tinte, peinado preferido, café con o sin azúcar..."
                     value={clientForm.notes}
                     onChange={(e) => setClientForm(prev => ({ ...prev, notes: e.target.value }))}
                   />
@@ -1533,8 +1684,8 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   <button type="button" className="btn-secondary" onClick={() => setShowAddClientModal(false)}>
                     Cancelar
                   </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#ec4899' }}>
-                    Guardar Cliente
+                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
+                    Guardar Ficha Predictiva
                   </button>
                 </div>
               </div>
@@ -1543,14 +1694,17 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         </div>
       )}
 
-      {/* 🛑 MODAL: VENDER PLAN DE MEMBRESÍA PREPAGO */}
+      {/* 🛑 MODAL: VENDER / ASIGNAR PASE DE MEMBRESÍA PREPAGO */}
       {showSellPassModal && (
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '440px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Vender Membresía Prepago a Cliente
-              </h3>
+          <div className="modal-content glass-panel" style={{ maxWidth: '460px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Crown size={20} style={{ color: '#f59e0b' }} />
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                  Vender Pase de Membresía
+                </h3>
+              </div>
               <button onClick={() => setShowSellPassModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                 <X size={18} />
               </button>
@@ -1558,34 +1712,34 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
             <form onSubmit={handleSellPassToClient}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '12.5px' }}>
-                  <div style={{ color: '#64748b' }}>Cliente Receptor:</div>
-                  <strong style={{ fontSize: '14px', color: '#0f172a' }}>{showSellPassModal.name}</strong> ({showSellPassModal.phone})
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Cliente Beneficiario</div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>{showSellPassModal.name}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>{showSellPassModal.phone}</div>
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Selecciona el Plan de Membresía *</label>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Seleccionar Plan de Membresía *</label>
                   <select
                     className="form-input"
                     value={selectedPlanForClient}
                     onChange={(e) => setSelectedPlanForClient(e.target.value)}
                     required
                   >
-                    <option value="">-- Elige un Plan --</option>
                     {plans.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} ({p.sessions} sesiones) - {formatCurrency(p.prepaidPrice)}
+                        {p.name} ({p.sessions} sesiones) - {formatCurrency(normalizePrice(p.prepaidPrice))}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
                   <button type="button" className="btn-secondary" onClick={() => setShowSellPassModal(null)}>
                     Cancelar
                   </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#10b981' }}>
-                    Confirmar Cobro y Activar
+                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
+                    Confirmar Venta y Activar Pase
                   </button>
                 </div>
               </div>
@@ -1594,14 +1748,17 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         </div>
       )}
 
-      {/* 🛑 MODAL: CANJEAR SESIÓN DE MEMBRESÍA */}
+      {/* 🛑 MODAL: CANJEAR / DEBITAR 1 SESIÓN */}
       {showRedeemPassModal && (
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
           <div className="modal-content glass-panel" style={{ maxWidth: '440px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Canjear 1 Sesión de Membresía
-              </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={20} style={{ color: '#10b981' }} />
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                  Canjear 1 Sesión
+                </h3>
+              </div>
               <button onClick={() => setShowRedeemPassModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                 <X size={18} />
               </button>
@@ -1609,64 +1766,23 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
             <form onSubmit={handleRedeemPassSession}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.2)', padding: '14px', borderRadius: '12px' }}>
-                  <div style={{ fontSize: '11px', color: '#be185d', fontWeight: 800 }}>MEMBRESÍA ACTIVA</div>
-                  <strong style={{ fontSize: '15px', color: '#0f172a' }}>{showRedeemPassModal.activePass?.planName}</strong>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#059669', marginTop: '4px' }}>
-                    Saldo actual: {showRedeemPassModal.activePass?.remainingSessions} de {showRedeemPassModal.activePass?.totalSessions} sesiones
+                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Cliente</div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>{showRedeemPassModal.name}</div>
+                  <div style={{ fontSize: '12.5px', color: '#be123c', fontWeight: 700, marginTop: '4px' }}>
+                    Plan: {showRedeemPassModal.activePass?.planName}
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#059669', marginTop: '6px' }}>
+                    Saldo actual: {showRedeemPassModal.activePass?.remainingSessions} sesiones restantes
                   </div>
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Profesional / Estilista que atiende *</label>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Profesional que realiza el servicio</label>
                   <select
                     className="form-input"
                     value={redeemStylist}
                     onChange={(e) => setRedeemStylist(e.target.value)}
-                    required
-                  >
-                    {stylists.map(s => (
-                      <option key={s.id} value={s.name}>{s.name} ({s.specialty})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                  <button type="button" className="btn-secondary" onClick={() => setShowRedeemPassModal(null)}>
-                    Cancelar
-                  </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#ec4899' }}>
-                    ✂️ Descontar 1 Sesión
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 🛑 MODAL: MEDIR Y REGISTRAR INSUMO POR PROFESIONAL */}
-      {showRecordSupplyModal && (
-        <div className="modal-overlay" style={{ zIndex: 99999 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '460px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Control de Insumos por Profesional (Medición)
-              </h3>
-              <button onClick={() => setShowRecordSupplyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleRecordSupplyUsage}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Estilista / Barbero Responsable *</label>
-                  <select
-                    className="form-input"
-                    value={supplyForm.stylist}
-                    onChange={(e) => setSupplyForm(prev => ({ ...prev, stylist: e.target.value }))}
-                    required
                   >
                     {stylists.map(s => (
                       <option key={s.id} value={s.name}>{s.name}</option>
@@ -1674,52 +1790,12 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   </select>
                 </div>
 
-                <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Servicio / Receta Estándar *</label>
-                  <select
-                    className="form-input"
-                    value={supplyForm.serviceRecipeId}
-                    onChange={(e) => setSupplyForm(prev => ({ ...prev, serviceRecipeId: e.target.value }))}
-                    required
-                  >
-                    {recipes.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.service} ({r.supplies[0]?.name}: {r.supplies[0]?.standardAmount} {r.supplies[0]?.unit})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Cliente Atendido (Opcional)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ej: Camila Soto"
-                    value={supplyForm.clientName}
-                    onChange={(e) => setSupplyForm(prev => ({ ...prev, clientName: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Cantidad Real Utilizada en Báscula *</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    required
-                    className="form-input"
-                    placeholder="Ej: 65 (gramos o ml reales)"
-                    value={supplyForm.actualAmountUsed}
-                    onChange={(e) => setSupplyForm(prev => ({ ...prev, actualAmountUsed: e.target.value }))}
-                  />
-                </div>
-
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button type="button" className="btn-secondary" onClick={() => setShowRecordSupplyModal(false)}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowRedeemPassModal(null)}>
                     Cancelar
                   </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#ec4899' }}>
-                    Registrar y Evaluar Desviación
+                  <button type="submit" className="btn-primary" style={{ background: '#10b981' }}>
+                    Debitar 1 Sesión & Notificar
                   </button>
                 </div>
               </div>
@@ -1731,10 +1807,10 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
       {/* 🛑 MODAL: CREAR PLAN DE MEMBRESÍA */}
       {showAddPlanModal && (
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '460px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                Crear Plan de Membresía Prepago
+          <div className="modal-content glass-panel" style={{ maxWidth: '480px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                Crear Nuevo Plan de Membresía Prepago
               </h3>
               <button onClick={() => setShowAddPlanModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                 <X size={18} />
@@ -1743,33 +1819,33 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              if (!planForm.name.trim()) return;
-              const newPlan = {
+              if (!newPlanForm.name.trim()) return;
+              const p = {
                 id: 'plan-' + Date.now(),
-                name: planForm.name.trim(),
-                category: planForm.category,
-                service: planForm.service,
-                sessions: Number(planForm.sessions || 4),
-                regularPrice: Number(planForm.regularPrice || 0),
-                prepaidPrice: Number(planForm.prepaidPrice || 0),
-                validityDays: Number(planForm.validityDays || 30),
-                description: planForm.description,
-                popular: false
+                name: newPlanForm.name.trim(),
+                category: newPlanForm.category,
+                service: newPlanForm.service,
+                sessions: Number(newPlanForm.sessions || 4),
+                regularPrice: Number(newPlanForm.regularPrice || 0),
+                prepaidPrice: Number(newPlanForm.prepaidPrice || 0),
+                validityDays: Number(newPlanForm.validityDays || 30),
+                description: newPlanForm.description,
+                popular: newPlanForm.popular
               };
-              setPlans(prev => [...prev, newPlan]);
+              setPlans(prev => [p, ...prev]);
               setShowAddPlanModal(false);
               playSound('scan');
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Nombre del Plan *</label>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Nombre del Plan / Bono *</label>
                   <input
                     type="text"
                     required
                     className="form-input"
-                    placeholder="Ej: Pase 4 Cortes al Mes"
-                    value={planForm.name}
-                    onChange={(e) => setPlanForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Ej: Pase 4 Cortes al Mes, Bono 3 Balayage..."
+                    value={newPlanForm.name}
+                    onChange={(e) => setNewPlanForm(prev => ({ ...prev, name: e.target.value }))}
                   />
                 </div>
 
@@ -1778,24 +1854,24 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                     <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Categoría</label>
                     <select
                       className="form-input"
-                      value={planForm.category}
-                      onChange={(e) => setPlanForm(prev => ({ ...prev, category: e.target.value }))}
+                      value={newPlanForm.category}
+                      onChange={(e) => setNewPlanForm(prev => ({ ...prev, category: e.target.value }))}
                     >
                       <option value="Barbería">Barbería</option>
                       <option value="Salón de Belleza">Salón de Belleza</option>
+                      <option value="Coloración">Coloración</option>
                       <option value="Nails & Estética">Nails & Estética</option>
-                      <option value="Spa & Masajes">Spa & Masajes</option>
                     </select>
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>N° de Sesiones</label>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Sesiones Incluidas</label>
                     <input
                       type="number"
-                      min="1"
+                      min="2"
                       max="50"
                       className="form-input"
-                      value={planForm.sessions}
-                      onChange={(e) => setPlanForm(prev => ({ ...prev, sessions: e.target.value }))}
+                      value={newPlanForm.sessions}
+                      onChange={(e) => setNewPlanForm(prev => ({ ...prev, sessions: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -1806,30 +1882,30 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                     <input
                       type="number"
                       className="form-input"
-                      placeholder="60000"
-                      value={planForm.regularPrice}
-                      onChange={(e) => setPlanForm(prev => ({ ...prev, regularPrice: e.target.value }))}
+                      value={newPlanForm.regularPrice}
+                      onChange={(e) => setNewPlanForm(prev => ({ ...prev, regularPrice: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Precio Prepago Plan</label>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Precio Prepago Especial *</label>
                     <input
                       type="number"
                       className="form-input"
-                      placeholder="45000"
-                      value={planForm.prepaidPrice}
-                      onChange={(e) => setPlanForm(prev => ({ ...prev, prepaidPrice: e.target.value }))}
+                      value={newPlanForm.prepaidPrice}
+                      onChange={(e) => setNewPlanForm(prev => ({ ...prev, prepaidPrice: e.target.value }))}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Vigencia en Días</label>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Días de Validez</label>
                   <input
                     type="number"
+                    min="7"
+                    max="365"
                     className="form-input"
-                    value={planForm.validityDays}
-                    onChange={(e) => setPlanForm(prev => ({ ...prev, validityDays: e.target.value }))}
+                    value={newPlanForm.validityDays}
+                    onChange={(e) => setNewPlanForm(prev => ({ ...prev, validityDays: e.target.value }))}
                   />
                 </div>
 
@@ -1838,17 +1914,28 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   <textarea
                     rows={2}
                     className="form-input"
-                    placeholder="Beneficios exclusivos del pase..."
-                    value={planForm.description}
-                    onChange={(e) => setPlanForm(prev => ({ ...prev, description: e.target.value }))}
+                    value={newPlanForm.description}
+                    onChange={(e) => setNewPlanForm(prev => ({ ...prev, description: e.target.value }))}
                   />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    id="chk-pop"
+                    checked={newPlanForm.popular}
+                    onChange={(e) => setNewPlanForm(prev => ({ ...prev, popular: e.target.checked }))}
+                  />
+                  <label htmlFor="chk-pop" style={{ fontSize: '12.5px', color: '#0f172a', fontWeight: 700, cursor: 'pointer' }}>
+                    Destacar como "MÁS ELEGIDO ⭐"
+                  </label>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
                   <button type="button" className="btn-secondary" onClick={() => setShowAddPlanModal(false)}>
                     Cancelar
                   </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#10b981' }}>
+                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
                     Guardar Plan
                   </button>
                 </div>
@@ -1858,12 +1945,179 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
         </div>
       )}
 
-      {/* 🛑 MODAL: AGREGAR ESTILISTA */}
+      {/* 🛑 MODAL: REGISTRAR CONSUMO EN BÁSCULA */}
+      {showRecordSupplyModal && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '460px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Package size={20} style={{ color: '#be123c' }} />
+                <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                  Medición de Insumos en Báscula
+                </h3>
+              </div>
+              <button onClick={() => setShowRecordSupplyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordSupplyUsage}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Estilista / Colorista *</label>
+                  <select
+                    className="form-input"
+                    value={supplyForm.stylist}
+                    onChange={(e) => setSupplyForm(prev => ({ ...prev, stylist: e.target.value }))}
+                  >
+                    {stylists.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Servicio / Receta Técnica *</label>
+                  <select
+                    className="form-input"
+                    value={supplyForm.serviceRecipeId}
+                    onChange={(e) => setSupplyForm(prev => ({ ...prev, serviceRecipeId: e.target.value }))}
+                  >
+                    {recipes.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.service} ({r.supplies[0]?.name} - Estándar: {r.supplies[0]?.standardAmount}{r.supplies[0]?.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Nombre del Cliente Atendido</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej: Camila Soto"
+                    value={supplyForm.clientName}
+                    onChange={(e) => setSupplyForm(prev => ({ ...prev, clientName: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Cantidad Real Pesada en Báscula *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    className="form-input"
+                    placeholder="Ej: 65 (gramos o ml)"
+                    value={supplyForm.actualAmountUsed}
+                    onChange={(e) => setSupplyForm(prev => ({ ...prev, actualAmountUsed: e.target.value }))}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowRecordSupplyModal(false)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn-primary" style={{ background: '#be123c' }}>
+                    Registrar Consumo
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🛑 MODAL: NUEVA RECETA TÉCNICA */}
+      {showAddRecipeModal && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '460px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                Nueva Receta Técnica Estándar
+              </h3>
+              <button onClick={() => setShowAddRecipeModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              const newR = {
+                id: 'rec-' + Date.now(),
+                service: fd.get('srv_name'),
+                category: fd.get('srv_cat'),
+                supplies: [
+                  { 
+                    name: fd.get('sup_name'), 
+                    standardAmount: Number(fd.get('sup_amount') || 50), 
+                    unit: fd.get('sup_unit') || 'g' 
+                  }
+                ],
+                notes: fd.get('srv_notes') || ''
+              };
+              setRecipes(prev => [newR, ...prev]);
+              setShowAddRecipeModal(false);
+              playSound('scan');
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Servicio *</label>
+                  <input name="srv_name" required placeholder="Ej: Mechas Babylights" className="form-input" />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Categoría</label>
+                  <select name="srv_cat" className="form-input">
+                    <option value="Coloración">Coloración</option>
+                    <option value="Tratamientos">Tratamientos</option>
+                    <option value="Barbería">Barbería</option>
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Insumo Principal</label>
+                    <input name="sup_name" required placeholder="Ej: Polvo Decolorante" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Cantidad</label>
+                    <input name="sup_amount" type="number" required defaultValue="50" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Unidad</label>
+                    <select name="sup_unit" className="form-input">
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                      <option value="oz">oz</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Instrucciones Técnicas</label>
+                  <textarea name="srv_notes" rows={2} className="form-input" placeholder="Proporción de mezcla, tiempo de exposición..." />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowAddRecipeModal(false)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
+                    Guardar Receta
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🛑 MODAL: REGISTRAR PROFESIONAL / ESTILISTA */}
       {showAddStylistModal && (
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
           <div className="modal-content glass-panel" style={{ maxWidth: '440px', padding: '24px', background: '#ffffff', borderRadius: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
                 Registrar Profesional / Estilista
               </h3>
               <button onClick={() => setShowAddStylistModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
@@ -1873,34 +2127,29 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              const form = e.target;
-              const name = form.st_name.value.trim();
-              const spec = form.st_spec.value.trim();
-              const comm = Number(form.st_comm.value || 50);
-
-              if (!name) return;
-              const newSty = {
+              const fd = new FormData(e.target);
+              const newSt = {
                 id: 'sty-' + Date.now(),
-                name,
-                nickname: name,
-                specialty: spec || 'Estilista Integral',
-                commissionPct: comm,
+                name: fd.get('st_name'),
+                nickname: fd.get('st_nick') || fd.get('st_name'),
+                specialty: fd.get('st_spec'),
+                commissionPct: Number(fd.get('st_comm') || 50),
                 monthlyServices: 0,
                 retainedClientsCount: 0,
                 efficiencyScore: 100
               };
-              setStylists(prev => [...prev, newSty]);
+              setStylists(prev => [...prev, newSt]);
               setShowAddStylistModal(false);
               playSound('scan');
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Nombre Completo *</label>
-                  <input name="st_name" required type="text" className="form-input" placeholder="Ej: Marcela Gómez" />
+                  <input name="st_name" required placeholder="Ej: Carlos Silva" className="form-input" />
                 </div>
                 <div>
-                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Especialidad Principal</label>
-                  <input name="st_spec" type="text" className="form-input" placeholder="Ej: Colorista Senior / Barbería Fade" />
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>Especialidad *</label>
+                  <input name="st_spec" required placeholder="Ej: Master Fade, Colorista Balayage, Nails" className="form-input" />
                 </div>
                 <div>
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>% Comisión por Servicio</label>
@@ -1911,7 +2160,7 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
                   <button type="button" className="btn-secondary" onClick={() => setShowAddStylistModal(false)}>
                     Cancelar
                   </button>
-                  <button type="submit" className="btn-primary" style={{ background: '#8b5cf6' }}>
+                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
                     Guardar Profesional
                   </button>
                 </div>

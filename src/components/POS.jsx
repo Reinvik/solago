@@ -1566,7 +1566,7 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
                       gap: '6px',
                       transition: 'all 0.2s ease'
                     }}
-                    title="Membresías & IA de Recompra Youzan Meiye"
+                    title="Membresías & IA de Recompra Barbería / Estética"
                   >
                     <Scissors size={14} />
                     <span>✂️ Membresías & IA</span>

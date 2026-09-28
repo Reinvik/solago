@@ -255,7 +255,7 @@ function AppContent() {
     switch (activeTab) {
       case 'dashboard': return 'Visualiza tus ganancias y control de stock en tiempo real.';
       case 'tables': return 'Administra comensales, comanda órdenes y liquida cuentas de mesas.';
-      case 'beauty': return 'Plataforma Youzan Meiye: pases prepago, retención predictiva por WhatsApp y control de insumos.';
+      case 'beauty': return 'Barbería & Estética: pases prepago, retención predictiva por WhatsApp y control de insumos.';
       case 'pos': return 'Cobra a tus clientes y descuenta stock del inventario al instante.';
       case 'inventory': return 'Administra tus insumos, ajusta precios y registra compras.';
       case 'finances': return 'Punto de equilibrio, simulación de metas y control de egresos operativos (OPEX).';

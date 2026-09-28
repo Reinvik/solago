@@ -1249,7 +1249,7 @@ export default function Inventory() {
               }}
               className="btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%)', borderColor: '#ec4899', color: '#db2777', fontWeight: 800 }}
-              title="Cargar servicios de barbería, coloración, pases de membresía e insumos técnicos Youzan Meiye"
+              title="Cargar servicios de barbería, coloración, pases de membresía e insumos técnicos de estética"
             >
               <Scissors size={15} />
               <span>✂️ Cargar Catálogo Base Barbería / Salón</span>

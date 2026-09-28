@@ -14,7 +14,7 @@ const GIROS_COMERCIALES = [
     icon: Scissors, 
     color: '#ec4899', 
     gradient: 'linear-gradient(135deg, #f43f5e, #ec4899, #a855f7)',
-    desc: 'Inspirado en Youzan Meiye (有赞美业): Membresías prepago (pases de sesiones), IA de recompra predictiva por WhatsApp y control de insumos por profesional.'
+    desc: 'Gestión moderna para Barberías y Salones: Membresías prepago (pases de sesiones), IA de recompra predictiva por WhatsApp y control de insumos por profesional.'
   },
   { 
     id: 'tienda_online', 
