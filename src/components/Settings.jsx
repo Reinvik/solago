@@ -1,13 +1,21 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { supabase } from '../utils/supabaseClient';
-import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator, BellRing, Save } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, DollarSign, Percent, Clock, RefreshCw, Utensils, ShoppingBag, ShoppingCart, User, Coffee, Monitor, Truck, Wrench, Store, Check, Sparkles, Palette, Image as ImageIcon, Building2, MapPin, Plus, ShieldCheck, Upload, Volume2, VolumeX, Smartphone, MessageSquare, Calculator, BellRing, Save, Scissors } from 'lucide-react';
 import ExchangeRateChart from './ExchangeRateChart';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { isSoundEnabled, setSoundEnabled, playSound, requestNotificationPermission, showNativeSaleNotification } from '../utils/soundEffects';
 import { cleanWhatsAppNumber } from '../utils/shiftExport';
 
 const GIROS_COMERCIALES = [
+  { 
+    id: 'belleza', 
+    name: 'Barbería, Salón & Estética', 
+    icon: Scissors, 
+    color: '#ec4899', 
+    gradient: 'linear-gradient(135deg, #f43f5e, #ec4899, #a855f7)',
+    desc: 'Inspirado en Youzan Meiye (有赞美业): Membresías prepago (pases de sesiones), IA de recompra predictiva por WhatsApp y control de insumos por profesional.'
+  },
   { 
     id: 'tienda_online', 
     name: 'Tienda Online / E-Commerce', 

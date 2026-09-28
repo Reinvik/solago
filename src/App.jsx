@@ -14,24 +14,25 @@ import FinanceModule from './components/FinanceModule';
 import BranchesControl from './components/BranchesControl';
 import ErrorBoundary from './components/ErrorBoundary';
 import SaleAlertBanner from './components/SaleAlertBanner';
-import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight, Store, RotateCw } from 'lucide-react';
+import BeautyPredictiveModule from './components/BeautyPredictiveModule';
+import { ChefHat, BellRing, LayoutDashboard, ShoppingCart, Package, History, LogOut, User, AlertTriangle, Eye, Globe, Shield, Settings as SettingsIcon, RefreshCw, Camera, ShieldCheck, Utensils, Building2, ChevronDown, Check, Plus, MapPin, GitBranch, X, Scale, Menu, ChevronLeft, ChevronRight, Store, RotateCw, Scissors } from 'lucide-react';
 
 function AppContent() {
   const { user, companyId, companyName, selectCompany, getAllCompanies, logout, lowStockCount, kitchenAlertInfo, kitchenReadyInfo, companySettings, syncExchangeRate, loading, branches = [], activeBranchId, activeBranch = {}, addBranch, switchBranch, bcvRate, euroRate, paraleloRate, isNexusOwner: contextIsNexusOwner, latestSaleAlert, dismissSaleAlert, formatCurrency } = usePuntoNexus();
   const VALID_TABS = useMemo(() => [
-    'dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'
+    'dashboard', 'pos', 'tables', 'beauty', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'
   ], []);
 
   const [activeTab, setActiveTabState] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlTab = params.get('tab') || params.get('m') || window.location.hash.replace('#', '');
-      if (urlTab && ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'].includes(urlTab)) {
+      if (urlTab && ['dashboard', 'pos', 'tables', 'beauty', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'].includes(urlTab)) {
         return urlTab;
       }
     }
     const saved = localStorage.getItem('punto_nexus_active_tab');
-    if (saved && ['dashboard', 'pos', 'tables', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'].includes(saved)) {
+    if (saved && ['dashboard', 'pos', 'tables', 'beauty', 'inventory', 'finances', 'branches', 'history', 'showcase', 'owner', 'settings'].includes(saved)) {
       return saved;
     }
     return 'dashboard';
@@ -138,7 +139,8 @@ function AppContent() {
   const hasBranches = Array.isArray(branches) && branches.length > 0;
   const currentGiro = companySettings?.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
   const isGastronomia = currentGiro === 'gastronomia';
-  const isOnlineStore = currentGiro === 'tienda_online' || !isGastronomia;
+  const isBelleza = currentGiro === 'belleza';
+  const isOnlineStore = currentGiro === 'tienda_online' || (!isGastronomia && !isBelleza);
 
   const isModuleVisible = (moduleKey) => {
     if (!user) return true;
@@ -237,6 +239,7 @@ function AppContent() {
       case 'dashboard': return 'Resumen del Negocio';
       case 'pos': return 'Terminal de Ventas (POS)';
       case 'tables': return 'Mesas & Comandero de Restaurante';
+      case 'beauty': return 'Barbería, Salón & Estética Predictiva';
       case 'inventory': return 'Gestión de Inventario';
       case 'finances': return 'Módulo de Finanzas & Equilibrio';
       case 'branches': return 'Control & Avance de Sucursales';
@@ -252,6 +255,7 @@ function AppContent() {
     switch (activeTab) {
       case 'dashboard': return 'Visualiza tus ganancias y control de stock en tiempo real.';
       case 'tables': return 'Administra comensales, comanda órdenes y liquida cuentas de mesas.';
+      case 'beauty': return 'Plataforma Youzan Meiye: pases prepago, retención predictiva por WhatsApp y control de insumos.';
       case 'pos': return 'Cobra a tus clientes y descuenta stock del inventario al instante.';
       case 'inventory': return 'Administra tus insumos, ajusta precios y registra compras.';
       case 'finances': return 'Punto de equilibrio, simulación de metas y control de egresos operativos (OPEX).';
@@ -354,6 +358,19 @@ function AppContent() {
             >
               <Utensils size={24} />
               <span>Mesas & Comandero</span>
+            </a>
+          )}
+
+          {(isBelleza || (Array.isArray(companySettings?.enabled_modules) && companySettings.enabled_modules.includes('beauty'))) && (
+            <a 
+              className={`sidebar-item ${activeTab === 'beauty' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('beauty'); if(window.innerWidth <= 768) setMenuCollapsed(true); }}
+              style={{ color: activeTab === 'beauty' ? undefined : '#ec4899' }}
+              title="Membresías & IA Belleza"
+              data-title="Membresías & IA Belleza"
+            >
+              <Scissors size={24} />
+              <span>Membresías & IA Belleza</span>
             </a>
           )}
 
@@ -908,6 +925,7 @@ function AppContent() {
           {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
           {activeTab === 'pos' && <POS setActiveTab={setActiveTab} initialCart={posCartPreload} clearInitialCart={() => setPosCartPreload(null)} />}
           {activeTab === 'tables' && <TablesModule setActiveTab={setActiveTab} setPosCart={(cart) => setPosCartPreload(cart)} />}
+          {activeTab === 'beauty' && <BeautyPredictiveModule setActiveTab={setActiveTab} />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'finances' && <FinanceModule />}
           {activeTab === 'branches' && <BranchesControl setActiveTab={setActiveTab} />}

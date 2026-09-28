@@ -10,7 +10,7 @@ import {
   Search, Plus, Minus, Trash2, CheckCircle, CheckCircle2, Printer, Download, XCircle, ShoppingBag, ShoppingCart, ShoppingBasket,
   CreditCard, DollarSign, QrCode, X, RefreshCw, Sparkles, Grid, LayoutGrid,
   List, Layers, SlidersHorizontal, Barcode, Volume2, VolumeX, Wifi, WifiOff, MessageCircle, Copy, Share2, Utensils, UtensilsCrossed,
-  ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package, Palette
+  ArrowLeft, Receipt, FileText, Users, Clock, AlertCircle, AlertTriangle, Check, Banknote, Landmark, Building2, Package, Palette, Scissors
 } from 'lucide-react';
 import { hasProductVariants, getProductVariants, getVariantStock } from '../utils/productSpecs';
 const getProductImage = (prod, isGastronomia = true) => {
@@ -30,6 +30,13 @@ const getProductImage = (prod, isGastronomia = true) => {
   if (name.includes('bebida') || name.includes('soda') || name.includes('jugo') || name.includes('coca') || cat.includes('bebida')) return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=600&q=80';
   if (name.includes('café') || name.includes('coffee') || cat.includes('café')) return 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80';
   if (name.includes('torta') || name.includes('postre') || cat.includes('postre')) return '/images/malteada_oreo.jpg';
+
+  // Belleza & Barbería Fallbacks
+  if (name.includes('corte') || name.includes('barber') || name.includes('fade')) return 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('barba') || name.includes('afeitad')) return 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('balayage') || name.includes('color') || name.includes('tinte')) return 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('uñas') || name.includes('manicur')) return 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('pase') || name.includes('membres')) return 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=600&q=80';
   
   if (!isGastronomia) {
     return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
@@ -1541,6 +1548,31 @@ export default function POS({ initialCart, clearInitialCart, setActiveTab }) {
             )}
             {setActiveTab && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '8px', marginLeft: '4px' }}>
+                {companySettings?.business_type === 'belleza' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('beauty')}
+                    style={{
+                      background: 'rgba(236, 72, 153, 0.15)',
+                      border: '1px solid rgba(236, 72, 153, 0.4)',
+                      color: '#f472b6',
+                      padding: '7px 12px',
+                      borderRadius: '10px',
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Membresías & IA de Recompra Youzan Meiye"
+                  >
+                    <Scissors size={14} />
+                    <span>✂️ Membresías & IA</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setActiveTab('inventory')}

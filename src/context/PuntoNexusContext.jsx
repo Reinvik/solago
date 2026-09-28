@@ -65,6 +65,22 @@ const MINIMARKET_PRODUCTS = [
   { id: 'prod-mini-14', name: 'Papel Higiénico Doble Hoja (4 uds)', sku: 'MINI-HOG-014', category: 'Limpieza y Hogar', cost_price: 1.4, sell_price: 2.6, stock: 40, min_stock: 10, unit: 'Un.', expiration_days: 999, image_url: 'https://images.unsplash.com/photo-1584556812952-905ffd0c611a?auto=format&fit=crop&w=400&q=80', description: 'Rollos de papel higiénico ultra suave acolchado.' }
 ];
 
+const BEAUTY_PRODUCTS = [
+  { id: 'prod-bty-1', name: 'Corte de Cabello Hombre / Fade', sku: 'SRV-BRB-001', category: 'Servicios Barbería', cost_price: 2.0, sell_price: 15.0, stock: 999, min_stock: 10, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=400&q=80', description: 'Corte clásico o degradé fade con asesoría de imagen y lavado.' },
+  { id: 'prod-bty-2', name: 'Perfilado de Barba & Toalla Caliente', sku: 'SRV-BRB-002', category: 'Servicios Barbería', cost_price: 1.5, sell_price: 12.0, stock: 999, min_stock: 10, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=400&q=80', description: 'Ritual de afeitado tradicional con toalla caliente y aceites esenciales.' },
+  { id: 'prod-bty-3', name: 'Balayage Iluminado + Matiz + Brushing', sku: 'SRV-COL-001', category: 'Coloración & Peluquería', cost_price: 18.0, sell_price: 65.0, stock: 999, min_stock: 5, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=400&q=80', description: 'Técnica de aclarado personalizada con matización y sellado de cutícula.' },
+  { id: 'prod-bty-4', name: 'Coloración Raíz / Cubrimiento Canas', sku: 'SRV-COL-002', category: 'Coloración & Peluquería', cost_price: 8.0, sell_price: 32.0, stock: 999, min_stock: 5, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=400&q=80', description: 'Aplicación de tinte en raíz con diagnóstico capilar y lavado nutritivo.' },
+  { id: 'prod-bty-5', name: 'Alisado Keratina / Botox Capilar', sku: 'SRV-TRT-001', category: 'Tratamientos Capilares', cost_price: 12.0, sell_price: 45.0, stock: 999, min_stock: 5, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1519699047748-de8e457a634e?auto=format&fit=crop&w=400&q=80', description: 'Tratamiento antifrizz termoactivo que restaura el brillo y suavidad extrema.' },
+  { id: 'prod-bty-6', name: 'Manicura Rusa + Esmaltado Permanente', sku: 'SRV-NLS-001', category: 'Uñas & Manicura', cost_price: 3.0, sell_price: 18.0, stock: 999, min_stock: 10, unit: 'Sesión', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?auto=format&fit=crop&w=400&q=80', description: 'Limpieza profunda de cutículas con torno y esmaltado de alta durabilidad.' },
+  { id: 'prod-bty-7', name: 'Pase Mensual Barbería: 4 Cortes al Mes', sku: 'MEM-BRB-001', category: 'Membresías Prepago', cost_price: 8.0, sell_price: 45.0, stock: 100, min_stock: 10, unit: 'Pase', expiration_days: 30, image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=400&q=80', description: 'Membresía Youzan Meiye: 4 cortes al mes con ahorro de $15 vs precio unitario.' },
+  { id: 'prod-bty-8', name: 'Bono Glamour: 3 Sesiones Balayage / Mant.', sku: 'MEM-COL-002', category: 'Membresías Prepago', cost_price: 25.0, sell_price: 95.0, stock: 50, min_stock: 5, unit: 'Pase', expiration_days: 90, image_url: 'https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?auto=format&fit=crop&w=400&q=80', description: 'Paquete de mantenimiento trimestral para rubios y morenas iluminadas.' },
+  { id: 'prod-bty-9', name: 'Tinte Profesional en Tubo (60g)', sku: 'INS-COL-001', category: 'Insumos Técnicos', cost_price: 3.5, sell_price: 6.5, stock: 45, min_stock: 10, unit: 'Tubo 60g', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=400&q=80', description: 'Coloración permanente en crema con micropigmentos intensos.' },
+  { id: 'prod-bty-10', name: 'Polvo Decolorante Blond Studio (500g)', sku: 'INS-COL-002', category: 'Insumos Técnicos', cost_price: 16.0, sell_price: 28.0, stock: 15, min_stock: 3, unit: 'Pote 500g', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1608248597359-56338b25cf42?auto=format&fit=crop&w=400&q=80', description: 'Polvo no volátil con poder aclarante de hasta 8 tonos.' },
+  { id: 'prod-bty-11', name: 'Oxidante en Crema 20 Volúmenes (1000ml)', sku: 'INS-COL-003', category: 'Insumos Técnicos', cost_price: 6.5, sell_price: 12.5, stock: 20, min_stock: 4, unit: 'Botella 1L', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=400&q=80', description: 'Activador enriquecido con aceites para una mezcla homogénea.' },
+  { id: 'prod-bty-12', name: 'Cera Fijación Mate para Cabello (100g)', sku: 'RET-STG-001', category: 'Productos Retail', cost_price: 4.5, sell_price: 9.9, stock: 35, min_stock: 8, unit: 'Pote 100g', expiration_days: 540, image_url: 'https://images.unsplash.com/photo-1597354984706-aec992b7d0d1?auto=format&fit=crop&w=400&q=80', description: 'Pomada fijadora mate soluble en agua con aroma amaderado.' },
+  { id: 'prod-bty-13', name: 'Óleo Reparador Argán & Macadamia (50ml)', sku: 'RET-TRT-002', category: 'Productos Retail', cost_price: 7.0, sell_price: 14.9, stock: 25, min_stock: 5, unit: 'Gotero 50ml', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1608248597359-56338b25cf42?auto=format&fit=crop&w=400&q=80', description: 'Sérum nutritivo para sellar puntas y aportar luminosidad sin dejar residuo graso.' }
+];
+
 const DEFAULT_SALES = [];
 
 const DEFAULT_TABLES = [
@@ -104,7 +120,7 @@ export const isNexusOwnerAccount = (emailOrName) => {
   if (!emailOrName) return false;
   const clean = String(emailOrName).toLowerCase().trim();
   return (
-    ['ariel.mellag@gmail.com', 'fariacricardog@gmail.com', 'rgfariac@gmail.com', 'albenisjrv@gmail.com'].includes(clean) ||
+    ['ariel.mellag@gmail.com', 'fariacricardog@gmail.com', 'rgfariac@gmail.com', 'albenisjrv@gmail.com', 'albenis@solago.com.ve'].includes(clean) ||
     clean.includes('albenis') ||
     clean.includes('albenisjrv') ||
     clean.includes('fariacricardo') ||
@@ -263,6 +279,14 @@ export const PuntoNexusProvider = ({ children }) => {
     {
       id: 'usr-matriz-4',
       email: 'albenisjrv@gmail.com',
+      full_name: 'Albenis (Nexus Owner)',
+      role: 'nexusowner',
+      branch_id: 'branch-matriz',
+      allowed_branches: ['all']
+    },
+    {
+      id: 'usr-matriz-4b',
+      email: 'albenis@solago.com.ve',
       full_name: 'Albenis (Nexus Owner)',
       role: 'nexusowner',
       branch_id: 'branch-matriz',
@@ -1734,13 +1758,13 @@ export const PuntoNexusProvider = ({ children }) => {
             const deduped = dedupeInventory(parsed);
             setInventory(deduped);
           } catch (e) {
-            const fallbackCat = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : DEFAULT_PRODUCTS;
+            const fallbackCat = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : (currentGiro === 'belleza' ? BEAUTY_PRODUCTS : DEFAULT_PRODUCTS);
             setInventory(fallbackCat);
             localStorage.setItem(branchInvKey, JSON.stringify(fallbackCat));
           }
         } else {
           const legacyInv = currentBranch?.is_main ? localStorage.getItem(`punto_nexus_inventory_${companyId}`) : null;
-          let initialCatalog = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : DEFAULT_PRODUCTS;
+          let initialCatalog = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : (currentGiro === 'belleza' ? BEAUTY_PRODUCTS : DEFAULT_PRODUCTS);
           if (legacyInv) {
             try { initialCatalog = dedupeInventory(JSON.parse(legacyInv)); } catch (e) {}
           }
@@ -1826,7 +1850,7 @@ export const PuntoNexusProvider = ({ children }) => {
             if (localCachedInvRaw) {
               try { setInventory(dedupeInventory(JSON.parse(localCachedInvRaw))); } catch (e) {}
             } else {
-              const initialCatalog = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : DEFAULT_PRODUCTS;
+              const initialCatalog = currentGiro === 'alimentos' ? MINIMARKET_PRODUCTS : (currentGiro === 'belleza' ? BEAUTY_PRODUCTS : DEFAULT_PRODUCTS);
               setInventory(initialCatalog);
               localStorage.setItem(branchInvKey, JSON.stringify(initialCatalog));
             }
@@ -2395,9 +2419,9 @@ export const PuntoNexusProvider = ({ children }) => {
     }
 
     // 0b. Acceso Prioritario para Albenis — Nexus Owner
-    if (cleanEmail === 'albenisjrv@gmail.com' || cleanEmail.includes('albenis')) {
+    if (cleanEmail === 'albenis@solago.com.ve' || cleanEmail === 'albenisjrv@gmail.com' || cleanEmail.includes('albenis')) {
       const userData = { 
-        email: cleanEmail.includes('@') ? cleanEmail : 'albenisjrv@gmail.com', 
+        email: cleanEmail.includes('@') ? cleanEmail : 'albenis@solago.com.ve', 
         name: 'Albenis (Nexus Owner)', 
         role: 'nexusowner' 
       };
@@ -4866,7 +4890,12 @@ export const PuntoNexusProvider = ({ children }) => {
 
   const resetCatalogForGiro = async (giroType = 'alimentos') => {
     const isMock = !isUUID(companyId);
-    const targetCatalog = giroType === 'alimentos' ? MINIMARKET_PRODUCTS : DEFAULT_PRODUCTS;
+    let targetCatalog = DEFAULT_PRODUCTS;
+    if (giroType === 'alimentos') {
+      targetCatalog = MINIMARKET_PRODUCTS;
+    } else if (giroType === 'belleza') {
+      targetCatalog = BEAUTY_PRODUCTS;
+    }
     const branchInvKey = `punto_nexus_inventory_${companyId}_${activeBranchId}`;
 
     setInventory(targetCatalog);

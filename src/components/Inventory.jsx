@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { usePuntoNexus } from '../context/PuntoNexusContext';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
-import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight, FileText, Palette } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldAlert, ShieldCheck, ArrowDownCircle, RefreshCw, X, Settings, Globe, ChevronDown, CheckCircle2, FileSpreadsheet, Upload, Download, Package, DollarSign, CreditCard, Utensils, ShoppingCart, Scissors, Store, Percent, Sparkles, TrendingUp, ChevronUp, Check, AlertTriangle, Ruler, Layers, MessageSquare, Star, Image as ImageIcon, ChevronLeft, ChevronRight, FileText, Palette } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parseProductSpecs, serializeProductSpecs, getProductVariants, getTotalVariantsStock, normalizeVariants } from '../utils/productSpecs';
 
@@ -1235,6 +1235,24 @@ export default function Inventory() {
             >
               <Utensils size={15} />
               <span>🍔 Cargar Menú Comida al Paso</span>
+            </button>
+          )}
+
+          {companySettings?.business_type === 'belleza' && (
+            <button 
+              type="button" 
+              onClick={async () => {
+                if (window.confirm("¿Deseas cargar el catálogo base para Barbería / Salón de Belleza & Estética (Cortes fade, balayage, membresías prepago, tintes e insumos técnicos)? Esto actualizará tu inventario.")) {
+                  await resetCatalogForGiro('belleza');
+                  alert("¡Catálogo de Barbería & Salón cargado con éxito para esta sucursal!");
+                }
+              }}
+              className="btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%)', borderColor: '#ec4899', color: '#db2777', fontWeight: 800 }}
+              title="Cargar servicios de barbería, coloración, pases de membresía e insumos técnicos Youzan Meiye"
+            >
+              <Scissors size={15} />
+              <span>✂️ Cargar Catálogo Base Barbería / Salón</span>
             </button>
           )}
 
