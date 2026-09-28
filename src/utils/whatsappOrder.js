@@ -31,7 +31,13 @@ export const formatShowcaseWhatsAppOrder = ({
     timeStyle: 'short'
   });
 
-  const headerTitle = isOnlineStore ? `🌐 *NUEVO PEDIDO DESDE TIENDA ONLINE*` : `🛒 *NUEVO PEDIDO DESDE VITRINA VIRTUAL*`;
+  const isBeauty = companySettings.business_type === 'belleza';
+  let headerTitle = `🛒 *NUEVO PEDIDO DESDE VITRINA VIRTUAL*`;
+  if (isBeauty) {
+    headerTitle = `✂️ *NUEVO PEDIDO QR - BARBERÍA & SALÓN*`;
+  } else if (isOnlineStore) {
+    headerTitle = `🌐 *NUEVO PEDIDO DESDE TIENDA ONLINE*`;
+  }
   let message = `${headerTitle}\n`;
   message += `🏢 *Establecimiento:* ${compName}${branchText}\n`;
   message += `👤 *Cliente:* ${client}\n`;
@@ -41,16 +47,16 @@ export const formatShowcaseWhatsAppOrder = ({
   }
 
   if (orderType === 'table' && tableName) {
-    message += `📍 *Mesa:* ${tableName}\n`;
+    message += isBeauty ? `📍 *Ubicación / Sillón:* ${tableName}\n` : `📍 *Mesa:* ${tableName}\n`;
   } else if (orderType === 'delivery') {
     message += `🛵 *Modalidad:* Envío a Domicilio (Delivery)\n`;
     if (shippingAddress && shippingAddress.trim()) {
       message += `🏠 *Dirección de Entrega:* ${shippingAddress.trim()}\n`;
     }
   } else if (orderType === 'pickup') {
-    message += `🏬 *Modalidad:* Retiro en Tienda / Local\n`;
+    message += isBeauty ? `🏬 *Modalidad:* Retiro en Salón / Mostrador\n` : `🏬 *Modalidad:* Retiro en Tienda / Local\n`;
   } else {
-    message += `🛍️ *Modalidad:* Para Llevar / Retiro en Barra\n`;
+    message += isBeauty ? `🛍️ *Modalidad:* Mostrador / Para Llevar\n` : `🛍️ *Modalidad:* Para Llevar / Retiro en Barra\n`;
   }
 
   if (ticketCode) {

@@ -78,7 +78,14 @@ const BEAUTY_PRODUCTS = [
   { id: 'prod-bty-10', name: 'Polvo Decolorante Blond Studio (500g)', sku: 'INS-COL-002', category: 'Insumos Técnicos', cost_price: 16.0, sell_price: 28.0, stock: 15, min_stock: 3, unit: 'Pote 500g', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1608248597359-56338b25cf42?auto=format&fit=crop&w=400&q=80', description: 'Polvo no volátil con poder aclarante de hasta 8 tonos.' },
   { id: 'prod-bty-11', name: 'Oxidante en Crema 20 Volúmenes (1000ml)', sku: 'INS-COL-003', category: 'Insumos Técnicos', cost_price: 6.5, sell_price: 12.5, stock: 20, min_stock: 4, unit: 'Botella 1L', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=400&q=80', description: 'Activador enriquecido con aceites para una mezcla homogénea.' },
   { id: 'prod-bty-12', name: 'Cera Fijación Mate para Cabello (100g)', sku: 'RET-STG-001', category: 'Productos Retail', cost_price: 4.5, sell_price: 9.9, stock: 35, min_stock: 8, unit: 'Pote 100g', expiration_days: 540, image_url: 'https://images.unsplash.com/photo-1597354984706-aec992b7d0d1?auto=format&fit=crop&w=400&q=80', description: 'Pomada fijadora mate soluble en agua con aroma amaderado.' },
-  { id: 'prod-bty-13', name: 'Óleo Reparador Argán & Macadamia (50ml)', sku: 'RET-TRT-002', category: 'Productos Retail', cost_price: 7.0, sell_price: 14.9, stock: 25, min_stock: 5, unit: 'Gotero 50ml', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1608248597359-56338b25cf42?auto=format&fit=crop&w=400&q=80', description: 'Sérum nutritivo para sellar puntas y aportar luminosidad sin dejar residuo graso.' }
+  { id: 'prod-bty-13', name: 'Óleo Reparador Argán & Macadamia (50ml)', sku: 'RET-TRT-002', category: 'Productos Retail', cost_price: 7.0, sell_price: 14.9, stock: 25, min_stock: 5, unit: 'Gotero 50ml', expiration_days: 730, image_url: 'https://images.unsplash.com/photo-1608248597359-56338b25cf42?auto=format&fit=crop&w=400&q=80', description: 'Sérum nutritivo para sellar puntas y aportar luminosidad sin dejar residuo graso.' },
+  // Snacks y Bebidas de Espera (Común en salones y barberías en Venezuela y Chile)
+  { id: 'prod-bty-14', name: 'Café Espresso Gourmet / Capuccino', sku: 'SNK-BEV-001', category: 'Bebidas & Cafetería', cost_price: 0.5, sell_price: 2.5, stock: 120, min_stock: 20, unit: 'Taza', expiration_days: 180, image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=400&q=80', description: 'Café expreso italiano recién molido para disfrutar durante la atención o espera.' },
+  { id: 'prod-bty-15', name: 'Refresco Coca-Cola / Gaseosa Helada', sku: 'SNK-BEV-002', category: 'Bebidas & Cafetería', cost_price: 0.8, sell_price: 2.0, stock: 60, min_stock: 12, unit: 'Lata 350ml', expiration_days: 180, image_url: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80', description: 'Lata bien fría servida con vaso y hielo.' },
+  { id: 'prod-bty-16', name: 'Agua Mineral Mineralizada (500ml)', sku: 'SNK-BEV-003', category: 'Bebidas & Cafetería', cost_price: 0.4, sell_price: 1.5, stock: 80, min_stock: 15, unit: 'Botella', expiration_days: 365, image_url: 'https://images.unsplash.com/photo-1559839914-ba2ce56499dd?auto=format&fit=crop&w=400&q=80', description: 'Agua pura mineral de vertiente bien helada.' },
+  { id: 'prod-bty-17', name: 'Cerveza Corona / Heineken Helada', sku: 'SNK-BEV-004', category: 'Bebidas & Cafetería', cost_price: 1.2, sell_price: 3.5, stock: 48, min_stock: 12, unit: 'Botella', expiration_days: 180, image_url: 'https://images.unsplash.com/photo-1608270195669-703a8309a474?auto=format&fit=crop&w=400&q=80', description: 'Cerveza premium helada para acompañar tu sesión de corte o barba.' },
+  { id: 'prod-bty-18', name: 'Porción de Tequeños Gourmet (5 uds)', sku: 'SNK-SNK-001', category: 'Snacks & Picoteo', cost_price: 1.5, sell_price: 4.5, stock: 30, min_stock: 6, unit: 'Ración', expiration_days: 30, image_url: '/images/tequenos_gourmet.jpg', description: 'Crujientes deditos de queso blanco venezolano fritos al momento con salsa de la casa.' },
+  { id: 'prod-bty-19', name: 'Mix de Frutos Secos & Snacks Premium', sku: 'SNK-SNK-002', category: 'Snacks & Picoteo', cost_price: 0.9, sell_price: 2.5, stock: 40, min_stock: 8, unit: 'Paquete', expiration_days: 120, image_url: 'https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=400&q=80', description: 'Almendras tostadas, castañas de cajú y maní saladito para picar en sala de espera.' }
 ];
 
 const DEFAULT_SALES = [];
@@ -89,6 +96,14 @@ const DEFAULT_TABLES = [
   { id: 'tbl-3', number: '3', name: 'Mesa 3 - Ventana', capacity: 4, status: 'available', diners: 0, items: [], openedAt: null },
   { id: 'tbl-4', number: '4', name: 'Mesa 4 - Terraza', capacity: 6, status: 'available', diners: 0, items: [], openedAt: null },
   { id: 'tbl-5', number: 'Barra 1', name: 'Barra Principal', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null }
+];
+
+const BEAUTY_STATIONS = [
+  { id: 'bty-st-1', number: '1', name: 'Sillón 1 - Master Barber', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null },
+  { id: 'bty-st-2', number: '2', name: 'Sillón 2 - Estilismo & Corte', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null },
+  { id: 'bty-st-3', number: '3', name: 'Estación 3 - Color & Balayage', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null },
+  { id: 'bty-st-4', number: '4', name: 'Estación 4 - Nails & Manicura', capacity: 1, status: 'available', diners: 0, items: [], openedAt: null },
+  { id: 'bty-st-5', number: 'VIP', name: 'Sala de Espera VIP / Cafetería', capacity: 6, status: 'available', diners: 0, items: [], openedAt: null }
 ];
 
 const GLOBAL_DEFAULT_FIXED_COSTS = {
@@ -4600,7 +4615,9 @@ export const PuntoNexusProvider = ({ children }) => {
       } catch (e) {}
     }
 
-    const defaultTagged = DEFAULT_TABLES.map(t => ({ ...t, branch_id: activeBranchId || 'branch-matriz' }));
+    const isBeauty = (companySettings?.business_type === 'belleza');
+    const targetDefault = isBeauty ? BEAUTY_STATIONS : DEFAULT_TABLES;
+    const defaultTagged = targetDefault.map(t => ({ ...t, branch_id: activeBranchId || 'branch-matriz' }));
     setTables(defaultTagged);
   }, [companyId, activeBranchId]);
 

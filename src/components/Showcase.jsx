@@ -92,12 +92,14 @@ export default function Showcase({ isPublicView = false }) {
   // Giro Comercial y modalidades adaptativas
   const currentGiro = companySettings?.business_type || (companyName?.toLowerCase().includes('anubis') ? 'tienda_online' : 'gastronomia');
   const isFoodBusiness = currentGiro === 'gastronomia';
-  const isOnlineStore = currentGiro === 'tienda_online' || !isFoodBusiness;
+  const isBeautyBusiness = currentGiro === 'belleza';
+  const isOnlineStore = currentGiro === 'tienda_online' || (!isFoodBusiness && !isBeautyBusiness);
+  const isStationOrTableBusiness = isFoodBusiness || isBeautyBusiness;
 
   // Estados de simulación y control de acceso del cliente
   const [selectedTableId, setSelectedTableId] = useState('');
   const [isTableLocked, setIsTableLocked] = useState(false);
-  const [hasNoTableMode, setHasNoTableMode] = useState(!isFoodBusiness); // Si es tienda online o ingresó sin mesa
+  const [hasNoTableMode, setHasNoTableMode] = useState(!isStationOrTableBusiness); // Si es tienda online o ingresó sin mesa
 
   // Modalidad Tienda Online (Delivery vs Retiro en Tienda)
   const [storeDeliveryMode, setStoreDeliveryMode] = useState('delivery'); // 'delivery' | 'pickup'
@@ -381,7 +383,14 @@ export default function Showcase({ isPublicView = false }) {
     if (!prod) return false;
     if (hasProductVariants(prod)) return false; // si tiene variantes, el stock se rige por cada variante
     if (prod.sku?.startsWith('SERV-') || prod.stock === 999) return true;
-    if (isFoodBusiness && (prod.stock === undefined || prod.stock === null || prod.stock === '')) return true;
+    if ((isFoodBusiness || isBeautyBusiness) && (prod.stock === undefined || prod.stock === null || prod.stock === '' || prod.stock >= 990)) return true;
+    if (isBeautyBusiness && (
+      prod.category?.toLowerCase().includes('servicio') || 
+      prod.category?.toLowerCase().includes('corte') || 
+      prod.category?.toLowerCase().includes('membres') || 
+      prod.category?.toLowerCase().includes('abono') || 
+      prod.type === 'service'
+    )) return true;
     return false;
   };
 
@@ -570,15 +579,54 @@ export default function Showcase({ isPublicView = false }) {
     }
   };
 
-  // Helper para asignar imagen: solo asigna comida por defecto si el giro es gastronomía
+  // Helper para asignar imagen: soporta gastronomía y barbería/estética
   const getProductImage = (prod) => {
     if (!prod) return '';
     if (prod.image_url) return prod.image_url;
+    const name = (prod.name || '').toLowerCase();
+    const cat = (prod.category || '').toLowerCase();
+
+    // Giro Barbería, Salones y Estética
+    if (isBeautyBusiness) {
+      if (name.includes('corte') || name.includes('fade') || name.includes('barba') || name.includes('afeit') || cat.includes('corte') || cat.includes('barber')) {
+        return 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('balayage') || name.includes('color') || name.includes('tinte') || name.includes('mecha') || cat.includes('color')) {
+        return 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('alisado') || name.includes('botox') || name.includes('keratina') || name.includes('peinado') || name.includes('lavado') || name.includes('hidrat')) {
+        return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('manic') || name.includes('uñas') || name.includes('unas') || name.includes('pedic') || cat.includes('manic')) {
+        return 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('membres') || name.includes('pase') || name.includes('bono') || name.includes('abono') || cat.includes('membres')) {
+        return 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('cera') || name.includes('pomada') || name.includes('gel') || name.includes('aceite') || name.includes('serum') || name.includes('shampoo') || name.includes('insumo') || cat.includes('cosm')) {
+        return 'https://images.unsplash.com/photo-1608248597359-57778b668045?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('café') || name.includes('cafe') || name.includes('espresso') || name.includes('capuch')) {
+        return 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('cerveza') || name.includes('beer')) {
+        return 'https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('tequeño') || name.includes('tequeno')) {
+        return '/images/tequenos_gourmet.jpg';
+      }
+      if (name.includes('fruto') || name.includes('snack') || name.includes('piqueo') || name.includes('mani') || name.includes('nuez')) {
+        return 'https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=600&q=80';
+      }
+      if (name.includes('coca') || name.includes('agua') || name.includes('refresco') || name.includes('bebida') || cat.includes('bebida')) {
+        return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=600&q=80';
+      }
+      return 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
+    }
+
     if (!isFoodBusiness) {
       return ''; // En tiendas online/retail no se usan fotos de comida como fallback
     }
-    const name = (prod.name || '').toLowerCase();
-    const cat = (prod.category || '').toLowerCase();
     if (name.includes('combo')) return '/images/combo_nexus.jpg';
     if (name.includes('hamburg') || name.includes('burger') || cat.includes('hamburg')) return '/images/burger_nexus.jpg';
     if (name.includes('pepito') || cat.includes('pepito')) return '/images/pepito_mixto.jpg';
@@ -597,7 +645,20 @@ export default function Showcase({ isPublicView = false }) {
   // Helper para asignar icono y texto contextual a cada categoría según el giro de la empresa
   const getCategoryLabelWithIcon = (cat) => {
     if (cat === 'ALL') {
-      return isFoodBusiness ? '🍔 Ver Todo el Menú' : '🛍️ Ver Todo el Catálogo';
+      return isBeautyBusiness ? '💈 Todo (Servicios & Bar)' : (isFoodBusiness ? '🍔 Ver Todo el Menú' : '🛍️ Ver Todo el Catálogo');
+    }
+
+    if (isBeautyBusiness) {
+      const lower = cat.toLowerCase();
+      if (lower.includes('corte') || lower.includes('barber') || lower.includes('afeit')) return `✂️ ${cat}`;
+      if (lower.includes('membres') || lower.includes('abono') || lower.includes('pase') || lower.includes('plan')) return `💳 ${cat}`;
+      if (lower.includes('color') || lower.includes('balayage') || lower.includes('tinte') || lower.includes('peluquer')) return `🎨 ${cat}`;
+      if (lower.includes('alisado') || lower.includes('tratamiento') || lower.includes('botox') || lower.includes('estetica') || lower.includes('facial')) return `✨ ${cat}`;
+      if (lower.includes('uñas') || lower.includes('unas') || lower.includes('manic') || lower.includes('pedic')) return `💅 ${cat}`;
+      if (lower.includes('insumo') || lower.includes('cosmet') || lower.includes('cuidado') || lower.includes('producto')) return `🧴 ${cat}`;
+      if (lower.includes('bebida') || lower.includes('cafe') || lower.includes('cafeter') || lower.includes('cerveza')) return `☕ ${cat}`;
+      if (lower.includes('snack') || lower.includes('piqueo') || lower.includes('comida') || lower.includes('espera')) return `🥨 ${cat}`;
+      return `💈 ${cat}`;
     }
 
     if (isFoodBusiness) {
@@ -633,7 +694,7 @@ export default function Showcase({ isPublicView = false }) {
   // Detectar mesa fijada en la URL (ej: ?mesa=1) o modalidades de Tienda Online (?mode=delivery, pickup)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const tableQuery = urlParams.get('mesa') || urlParams.get('table') || urlParams.get('m');
+    const tableQuery = urlParams.get('mesa') || urlParams.get('table') || urlParams.get('m') || urlParams.get('sillon') || urlParams.get('estacion');
     const modeQuery = urlParams.get('mode');
 
     if (modeQuery === 'delivery') {
@@ -646,7 +707,7 @@ export default function Showcase({ isPublicView = false }) {
       setStoreDeliveryMode('pickup');
       setSelectedTableId('');
       setIsTableLocked(false);
-    } else if (isFoodBusiness && tableQuery && tables.length > 0) {
+    } else if (isStationOrTableBusiness && tableQuery && tables.length > 0) {
       const foundTable = tables.find(t => 
         t.id === tableQuery || 
         t.number.toString().toLowerCase() === tableQuery.toLowerCase() || 
@@ -666,7 +727,7 @@ export default function Showcase({ isPublicView = false }) {
       setSelectedTableId('');
       setIsTableLocked(false);
     }
-  }, [tables, isFoodBusiness]);
+  }, [tables, isFoodBusiness, isBeautyBusiness, isStationOrTableBusiness]);
 
   // Categorías
   const categories = useMemo(() => {
@@ -805,7 +866,7 @@ export default function Showcase({ isPublicView = false }) {
     const currentTotal = totalAmount;
     const currentNotes = orderNotes;
 
-    if (!isFoodBusiness) {
+    if (!isStationOrTableBusiness) {
       orderType = storeDeliveryMode; // 'delivery' | 'pickup'
       const res = await createWebOrder({
         order_type: orderType,
@@ -828,19 +889,19 @@ export default function Showcase({ isPublicView = false }) {
         if (targetTable.status !== 'occupied') {
           openTable(targetTable.id, 2);
         }
-        const activeParticipant = participantName.trim() || 'General';
+        const activeParticipant = participantName.trim() || (isBeautyBusiness ? 'Cliente' : 'General');
         for (const item of currentBasket) {
           addItemToTable(targetTable.id, item.part, item.cantidad, currentNotes.trim(), activeParticipant);
         }
       }
 
-      ticketCode = `ORD-${Math.floor(100 + Math.random() * 900)}`;
+      ticketCode = isBeautyBusiness ? `SAL-${Math.floor(100 + Math.random() * 900)}` : `ORD-${Math.floor(100 + Math.random() * 900)}`;
       await createWebOrder({
         ticket_code: ticketCode,
         order_type: 'table',
-        customer_name: participantName || `Mesa ${finalTableName}`,
+        customer_name: participantName || (isBeautyBusiness ? `${finalTableName}` : `Mesa ${finalTableName}`),
         customer_phone: customerPhone,
-        shipping_address: finalTableName ? `Mesa: ${finalTableName}` : '',
+        shipping_address: finalTableName ? (isBeautyBusiness ? `Ubicación: ${finalTableName}` : `Mesa: ${finalTableName}`) : '',
         notes: currentNotes,
         total_amount: currentTotal,
         items: currentBasket,
@@ -860,7 +921,7 @@ export default function Showcase({ isPublicView = false }) {
         branch_id: activeBranchId,
         branch_name: activeBranch?.name
       });
-      ticketCode = res?.code || `PED-${Math.floor(1000 + Math.random() * 9000)}`;
+      ticketCode = res?.code || (isBeautyBusiness ? `SAL-${Math.floor(1000 + Math.random() * 9000)}` : `PED-${Math.floor(1000 + Math.random() * 9000)}`);
       await shareCart(currentBasket).catch(() => {});
     }
 
@@ -943,16 +1004,20 @@ export default function Showcase({ isPublicView = false }) {
   let activeQrLabel = '';
   let activeQrDesc = '';
 
-  if (isFoodBusiness) {
+  if (isStationOrTableBusiness) {
     activeQrUrl = !hasNoTableMode && selectedTableObj 
       ? `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(selectedTableObj.name)}`
       : `${baseUrl}?${companyQuery}&mode=takeaway`;
 
     activeQrLabel = !hasNoTableMode && selectedTableObj 
       ? `QR Oficial ${selectedTableObj.name} (${companyName}${activeBranchLabel})`
-      : `QR Oficial Pedido Para Llevar (${companyName}${activeBranchLabel})`;
+      : isBeautyBusiness
+        ? `QR Oficial Espera General / Mostrador (${companyName}${activeBranchLabel})`
+        : `QR Oficial Pedido Para Llevar (${companyName}${activeBranchLabel})`;
 
-    activeQrDesc = 'Este es el enlace exacto asignado a esta ubicación. Puedes colocar el código QR en la estampa de la mesa.';
+    activeQrDesc = isBeautyBusiness
+      ? 'Este es el enlace directo a este sillón o estación. Los clientes podrán ordenar cortes, membresías, productos o café desde su celular.'
+      : 'Este es el enlace exacto asignado a esta ubicación. Puedes colocar el código QR en la estampa de la mesa.';
   } else {
     // Modo Tienda Online / E-Commerce
     if (storeLinkMode === 'delivery') {
@@ -1673,12 +1738,18 @@ export default function Showcase({ isPublicView = false }) {
               </div>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: 900, color: '#0f172a' }}>
-                  {isFoodBusiness ? 'Generador de Links Reales & Código QR Dinámico' : 'Enlace Oficial y Códigos QR de tu Tienda Online'}
+                  {isBeautyBusiness
+                    ? 'Generador de QR para Sillones, Estaciones & Sala de Espera'
+                    : isFoodBusiness 
+                      ? 'Generador de Links Reales & Código QR Dinámico' 
+                      : 'Enlace Oficial y Códigos QR de tu Tienda Online'}
                 </div>
                 <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                  {isFoodBusiness 
-                    ? 'Selecciona cualquier mesa para obtener su link directo y código QR oficial escaneable.'
-                    : 'Comparte estos enlaces en redes sociales o genera códigos QR para tus volantes, empaques y publicidad.'}
+                  {isBeautyBusiness
+                    ? 'Genera e imprime el código QR para cada sillón o estación para que el cliente solicite cortes, productos o cafetería.'
+                    : isFoodBusiness 
+                      ? 'Selecciona cualquier mesa para obtener su link directo y código QR oficial escaneable.'
+                      : 'Comparte estos enlaces en redes sociales o genera códigos QR para tus volantes, empaques y publicidad.'}
                 </div>
               </div>
             </div>
@@ -1690,7 +1761,7 @@ export default function Showcase({ isPublicView = false }) {
               style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 800, padding: '7px 12px', borderRadius: '10px', borderColor: 'var(--color-cyan)', color: 'var(--color-cyan)' }}
             >
               <Grid size={14} />
-              <span>{isFoodBusiness ? `Ver Todos los QR (${tables.length + 1})` : 'Ver Todos los Enlaces y QR'}</span>
+              <span>{isStationOrTableBusiness ? `Ver Todos los QR (${tables.length + 1})` : 'Ver Todos los Enlaces y QR'}</span>
             </button>
           </div>
 
@@ -1728,11 +1799,11 @@ export default function Showcase({ isPublicView = false }) {
             </div>
           )}
 
-          {/* Píldoras de Selección: Mesas para Restaurantes / Modos para Tienda Online */}
-          {isFoodBusiness ? (
+          {/* Píldoras de Selección: Sillones/Mesas para Belleza/Gastronomía o Modos para Tienda Online */}
+          {isStationOrTableBusiness ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
               <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginRight: '4px' }}>
-                Selecciona Mesa / Ubicación:
+                {isBeautyBusiness ? 'Selecciona Sillón / Estación:' : 'Selecciona Mesa / Ubicación:'}
               </span>
               
               {tables.map((tbl, idx) => {
@@ -1759,7 +1830,7 @@ export default function Showcase({ isPublicView = false }) {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    🪑 {tbl.name}
+                    {isBeautyBusiness ? '✂️' : '🪑'} {tbl.name}
                   </button>
                 );
               })}
@@ -1784,7 +1855,7 @@ export default function Showcase({ isPublicView = false }) {
                   transition: 'all 0.2s ease'
                 }}
               >
-                🛍️ Para Llevar
+                {isBeautyBusiness ? '☕ Sala de Espera / Mostrador' : '🛍️ Para Llevar'}
               </button>
             </div>
           ) : (
@@ -2010,7 +2081,7 @@ export default function Showcase({ isPublicView = false }) {
                     textTransform: 'uppercase', 
                     letterSpacing: '0.04em' 
                   }}>
-                    {isFoodBusiness ? '🟢 Abierto • Menú Digital QR' : '🛍️ Tienda Online Oficial'}
+                    {isBeautyBusiness ? '💈 Abierto • Carta Digital y Autoservicio' : (isFoodBusiness ? '🟢 Abierto • Menú Digital QR' : '🛍️ Tienda Online Oficial')}
                   </span>
                   <span style={{ 
                     fontSize: '10px', 
@@ -2034,9 +2105,11 @@ export default function Showcase({ isPublicView = false }) {
                   {companyName || 'Punto Nexus'}
                 </h2>
                 <p style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px', margin: 0 }}>
-                  {isFoodBusiness 
-                    ? 'Explora nuestra carta digital y realiza tu pedido directo al instante.'
-                    : 'Explora nuestro catálogo exclusivo, haz tu pedido y recibe atención directa.'}
+                  {isBeautyBusiness
+                    ? 'Elige tus servicios de barbería/estética, membresías, cosmética o pide café y snacks desde tu sillón.'
+                    : (isFoodBusiness 
+                      ? 'Explora nuestra carta digital y realiza tu pedido directo al instante.'
+                      : 'Explora nuestro catálogo exclusivo, haz tu pedido y recibe atención directa.')}
                 </p>
               </div>
             </div>
@@ -2051,7 +2124,7 @@ export default function Showcase({ isPublicView = false }) {
 
           {/* ── BANNER DE UBICACIÓN / MODALIDAD ── */}
           <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            {!isFoodBusiness ? (
+            {!isStationOrTableBusiness ? (
               <div style={{
                 background: storeDeliveryMode === 'delivery' ? 'rgba(16, 185, 129, 0.14)' : 'rgba(6, 182, 212, 0.14)',
                 border: `1px solid ${storeDeliveryMode === 'delivery' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(6, 182, 212, 0.35)'}`,
@@ -2125,7 +2198,7 @@ export default function Showcase({ isPublicView = false }) {
                 </div>
               </div>
             ) : !hasNoTableMode && selectedTableObj ? (
-              /* ESTADO MESA FIJADA (READ-ONLY) */
+              /* ESTADO MESA O SILLÓN FIJADO (READ-ONLY) */
               <div style={{
                 background: 'rgba(16, 185, 129, 0.12)',
                 border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -2140,19 +2213,22 @@ export default function Showcase({ isPublicView = false }) {
                   <ShieldCheck size={18} style={{ color: '#4ade80' }} />
                   <div>
                     <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#ffffff' }}>
-                      Ubicación Verificada: <strong style={{ color: '#38bdf8' }}>{selectedTableObj.name}</strong>
+                      {isBeautyBusiness ? 'Ubicación en Salón / Sillón: ' : 'Ubicación Verificada: '}
+                      <strong style={{ color: '#38bdf8' }}>{selectedTableObj.name}</strong>
                     </span>
                     <span style={{ fontSize: '10.5px', color: '#94a3b8', display: 'block' }}>
-                      🔒 Tu orden será entregada directamente a tu mesa.
+                      {isBeautyBusiness
+                        ? '✂️ Tu pedido de insumos, servicios o cafetería será atendido en tu estación.'
+                        : '🔒 Tu orden será entregada directamente a tu mesa.'}
                     </span>
                   </div>
                 </div>
                 <span style={{ fontSize: '10px', fontWeight: 800, color: '#4ade80', background: 'rgba(52, 211, 153, 0.2)', padding: '2px 8px', borderRadius: '6px' }}>
-                  MESA OK
+                  {isBeautyBusiness ? 'ESTACIÓN ACTIVA' : 'MESA OK'}
                 </span>
               </div>
             ) : (
-              /* ESTADO PARA LLEVAR (SIN OPCIÓN DE ELEGIR MESA) */
+              /* ESTADO ESPERA / PARA LLEVAR */
               <div style={{
                 background: 'rgba(168, 85, 247, 0.12)',
                 border: '1px solid rgba(168, 85, 247, 0.35)',
@@ -2165,10 +2241,12 @@ export default function Showcase({ isPublicView = false }) {
                 <ShoppingBag size={18} style={{ color: '#c084fc' }} />
                 <div>
                   <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#ffffff' }}>
-                    Modalidad: <strong style={{ color: '#c084fc' }}>🛍️ Pedido Para Llevar / Retiro en Barra</strong>
+                    Modalidad: <strong style={{ color: '#c084fc' }}>{isBeautyBusiness ? '☕ Sala de Espera / Mostrador' : '🛍️ Pedido Para Llevar / Retiro en Barra'}</strong>
                   </span>
                   <span style={{ fontSize: '10.5px', color: '#94a3b8', display: 'block' }}>
-                    Al confirmar recibirás un código para retirar tu orden en caja.
+                    {isBeautyBusiness 
+                      ? 'Al confirmar recibirás un código y tu pedido será preparado en recepción o cafetería.'
+                      : 'Al confirmar recibirás un código para retirar tu orden en caja.'}
                   </span>
                 </div>
               </div>
@@ -2223,7 +2301,7 @@ export default function Showcase({ isPublicView = false }) {
                 type="text"
                 className="form-input"
                 style={{ width: '100%', padding: '10px 14px 10px 38px', borderRadius: '12px', background: '#ffffff', fontSize: '13px' }}
-                placeholder={isFoodBusiness ? "Buscar en el menú (ej: hamburguesa, bebida, postre)..." : "Buscar productos, categorías o artículos..."}
+                placeholder={isBeautyBusiness ? "Buscar servicios, membresías, productos, café o snacks..." : (isFoodBusiness ? "Buscar en el menú (ej: hamburguesa, bebida, postre)..." : "Buscar productos, categorías o artículos...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -2253,7 +2331,7 @@ export default function Showcase({ isPublicView = false }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
           {filteredProducts.length === 0 ? (
               <div style={{ padding: '40px', gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
-                {isFoodBusiness ? 'No se encontraron productos disponibles en el menú.' : 'No se encontraron productos disponibles en el catálogo.'}
+                {isBeautyBusiness ? 'No se encontraron servicios o productos disponibles en la carta.' : (isFoodBusiness ? 'No se encontraron productos disponibles en el menú.' : 'No se encontraron productos disponibles en el catálogo.')}
               </div>
             ) : (
               filteredProducts.map((prod, idx) => {
@@ -2669,7 +2747,7 @@ export default function Showcase({ isPublicView = false }) {
         }}>
           <div>
             <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.4px' }}>
-              Resumen ({totalItemsCount} ítems) • {!isFoodBusiness ? (storeDeliveryMode === 'delivery' ? '🛵 Envío a Domicilio' : '🏬 Retiro en Tienda') : (!hasNoTableMode && selectedTableObj ? selectedTableObj.name : 'Para Llevar')}
+              Resumen ({totalItemsCount} ítems) • {isBeautyBusiness ? (!hasNoTableMode && selectedTableObj ? `✂️ ${selectedTableObj.name}` : '☕ Sala de Espera') : (!isFoodBusiness ? (storeDeliveryMode === 'delivery' ? '🛵 Envío a Domicilio' : '🏬 Retiro en Tienda') : (!hasNoTableMode && selectedTableObj ? selectedTableObj.name : 'Para Llevar'))}
             </span>
             <div style={{ marginTop: '2px' }}>
               <DualCurrencyDisplay amount={totalAmount} fontSize="18px" primaryColor={companySettings.price_color || companySettings.accent_color || '#38bdf8'} showSwap={true} />
@@ -2715,12 +2793,16 @@ export default function Showcase({ isPublicView = false }) {
               <div>
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <QrCode size={22} style={{ color: 'var(--color-cyan)' }} />
-                  {isFoodBusiness ? 'Estampas y Códigos QR del Establecimiento' : 'Enlaces y Códigos QR de tu Tienda Online'}
+                  {isBeautyBusiness
+                    ? 'Códigos QR para Sillones, Estaciones y Espera'
+                    : (isFoodBusiness ? 'Estampas y Códigos QR del Establecimiento' : 'Enlaces y Códigos QR de tu Tienda Online')}
                 </h3>
                 <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  {isFoodBusiness 
-                    ? 'Imprime estas estampas o copia los enlaces para colocar los códigos QR en cada mesa del salón.'
-                    : 'Copia los enlaces para compartir con tus clientes o imprime los códigos QR para tus folletos y empaques.'}
+                  {isBeautyBusiness 
+                    ? 'Imprime estos códigos QR y colócalos en el espejo de cada sillón o en las mesas de espera para que tus clientes pidan directamente.'
+                    : (isFoodBusiness 
+                      ? 'Imprime estas estampas o copia los enlaces para colocar los códigos QR en cada mesa del salón.'
+                      : 'Copia los enlaces para compartir con tus clientes o imprime los códigos QR para tus folletos y empaques.')}
                 </p>
               </div>
               
@@ -2732,7 +2814,7 @@ export default function Showcase({ isPublicView = false }) {
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '8px 14px' }}
                 >
                   <Printer size={16} />
-                  <span>{isFoodBusiness ? 'Imprimir Estampas' : 'Imprimir Códigos QR'}</span>
+                  <span>{isBeautyBusiness ? 'Imprimir Códigos QR' : (isFoodBusiness ? 'Imprimir Estampas' : 'Imprimir Códigos QR')}</span>
                 </button>
                 <button className="modal-close" onClick={() => setShowAllQrsModal(false)}>
                   <X size={20} />
@@ -2742,12 +2824,12 @@ export default function Showcase({ isPublicView = false }) {
 
             {/* Grid de QR Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '16px', maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
-              {isFoodBusiness ? (
+              {isStationOrTableBusiness ? (
                 <>
-                  {/* Opción Para Llevar */}
+                  {/* Opción Para Llevar o Sala de Espera */}
                   <div style={{ background: '#f8fafc', border: '2px dashed #a855f7', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 900, background: 'rgba(168, 85, 247, 0.15)', color: '#7e22ce', padding: '3px 10px', borderRadius: '99px' }}>
-                      🛍️ PARA LLEVAR / BARRA
+                      {isBeautyBusiness ? '☕ ESPERA GENERAL / BARRA' : '🛍️ PARA LLEVAR / BARRA'}
                     </span>
                     <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
                       <img 
@@ -2768,13 +2850,13 @@ export default function Showcase({ isPublicView = false }) {
                     </button>
                   </div>
 
-                  {/* Mesas del salón */}
+                  {/* Sillones o Mesas del salón */}
                   {tables.map((tbl, idx) => {
                     const tableUrl = `${baseUrl}?${companyQuery}&mesa=${encodeURIComponent(tbl.name)}`;
                     return (
                       <div key={tbl.id || tbl.number || `tbl-qr-${idx}`} style={{ background: '#f8fafc', border: '2px solid var(--color-cyan)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
                         <span style={{ fontSize: '12px', fontWeight: 900, background: 'rgba(6, 182, 212, 0.15)', color: 'var(--color-cyan)', padding: '3px 10px', borderRadius: '99px' }}>
-                          🪑 {tbl.name}
+                          {isBeautyBusiness ? '✂️' : '🪑'} {tbl.name}
                         </span>
                         <div style={{ margin: '14px 0', background: '#ffffff', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
                           <img 
@@ -2898,7 +2980,7 @@ export default function Showcase({ isPublicView = false }) {
               </button>
             </div>
 
-            {!isFoodBusiness ? (
+            {!isStationOrTableBusiness ? (
               <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '12px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
                   Modalidad de Entrega:
@@ -2950,9 +3032,13 @@ export default function Showcase({ isPublicView = false }) {
               </div>
             ) : (
               <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>Ubicación / Destino:</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                  {isBeautyBusiness ? 'Sillón / Estación:' : 'Ubicación / Destino:'}
+                </span>
                 <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--color-cyan)' }}>
-                  {!hasNoTableMode && selectedTableObj ? `🍽️ ${selectedTableObj.name}` : '🛍️ Para Llevar / Caja'}
+                  {!hasNoTableMode && selectedTableObj 
+                    ? (isBeautyBusiness ? `✂️ ${selectedTableObj.name}` : `🍽️ ${selectedTableObj.name}`) 
+                    : (isBeautyBusiness ? '☕ Sala de Espera / Mostrador' : '🛍️ Para Llevar / Caja')}
                 </span>
               </div>
             )}
@@ -3089,7 +3175,7 @@ export default function Showcase({ isPublicView = false }) {
               </div>
             </div>
 
-            {!isFoodBusiness ? (
+            {!isStationOrTableBusiness ? (
               <>
                 <div className="form-group" style={{ marginBottom: '14px' }}>
                   <label className="form-label" style={{ fontWeight: 800 }}>👤 Nombre Completo del Cliente (*)</label>
@@ -3146,29 +3232,33 @@ export default function Showcase({ isPublicView = false }) {
               </>
             ) : (
               <>
-                {!hasNoTableMode && selectedTableObj && (
-                  <div className="form-group" style={{ marginBottom: '14px' }}>
-                    <label className="form-label" style={{ fontWeight: 800 }}>👤 Nombre del Participante (¿Quién pide?)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Ej: Juan, María, Carlos..."
-                      value={participantName}
-                      onChange={(e) => handleParticipantNameChange(e.target.value)}
-                      style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
-                    />
-                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                      Este nombre se usará en la mesa para identificar tus consumos y cobrar por separado en Caja.
-                    </span>
-                  </div>
-                )}
-
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label className="form-label">Nota Especial para la Cocina (Opcional)</label>
+                <div className="form-group" style={{ marginBottom: '14px' }}>
+                  <label className="form-label" style={{ fontWeight: 800 }}>
+                    {isBeautyBusiness ? '👤 Nombre del Cliente (¿A quién atendemos?)' : '👤 Nombre del Participante (¿Quién pide?)'}
+                  </label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Ej: Sin cebolla, extra salsa, papas bien crujientes..."
+                    placeholder={isBeautyBusiness ? "Ej: Carlos, Camila, Andrea..." : "Ej: Juan, María, Carlos..."}
+                    value={participantName}
+                    onChange={(e) => handleParticipantNameChange(e.target.value)}
+                    style={{ fontSize: '13px', fontWeight: 600, borderColor: 'var(--color-cyan)' }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    {isBeautyBusiness
+                      ? 'Tu barbero o estilista sabrá de quién es el pedido para servirlo en tu estación o registrar tus puntos.'
+                      : 'Este nombre se usará en la mesa para identificar tus consumos y cobrar por separado en Caja.'}
+                  </span>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label className="form-label">
+                    {isBeautyBusiness ? 'Nota o Instrucción Especial (Opcional)' : 'Nota Especial para la Cocina (Opcional)'}
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder={isBeautyBusiness ? "Ej: Café con poca azúcar, corte con toalla caliente..." : "Ej: Sin cebolla, extra salsa, papas bien crujientes..."}
                     value={orderNotes}
                     onChange={(e) => setOrderNotes(e.target.value)}
                     style={{ fontSize: '12px' }}
@@ -3196,15 +3286,15 @@ export default function Showcase({ isPublicView = false }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                background: !isFoodBusiness ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : undefined,
-                boxShadow: !isFoodBusiness ? '0 4px 16px rgba(22, 163, 74, 0.35)' : undefined
+                background: isBeautyBusiness ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)' : (!isFoodBusiness ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : undefined),
+                boxShadow: isBeautyBusiness ? '0 4px 16px rgba(244, 63, 94, 0.35)' : (!isFoodBusiness ? '0 4px 16px rgba(22, 163, 74, 0.35)' : undefined)
               }}
             >
-              {!isFoodBusiness ? <MessageSquare size={18} /> : <Send size={16} />}
+              {isBeautyBusiness ? <Scissors size={17} /> : (!isFoodBusiness ? <MessageSquare size={18} /> : <Send size={16} />)}
               <span>
                 {processingOrder 
                   ? 'Procesando...' 
-                  : (!isFoodBusiness ? 'CONFIRMAR Y ENVIAR POR WHATSAPP 🚀' : 'CONFIRMAR Y ENVIAR PEDIDO 🚀')}
+                  : (isBeautyBusiness ? 'SOLICITAR POR QR Y ENVIAR AL SALÓN ✂️' : (!isFoodBusiness ? 'CONFIRMAR Y ENVIAR POR WHATSAPP 🚀' : 'CONFIRMAR Y ENVIAR PEDIDO 🚀'))}
               </span>
             </button>
 
@@ -3223,9 +3313,13 @@ export default function Showcase({ isPublicView = false }) {
               <CheckCircle2 size={34} style={{ color: 'var(--color-emerald)' }} />
             </div>
             
-            <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0 }}>¡Orden Enviada con Éxito!</h3>
+            <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+              {isBeautyBusiness ? '¡Solicitud Recibida en Salón!' : '¡Orden Enviada con Éxito!'}
+            </h3>
             <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Asignado a <strong style={{ color: 'var(--color-cyan)' }}>{kioskOrderSuccess.tableName}</strong>.
+              {isBeautyBusiness
+                ? <>Asignado a <strong style={{ color: 'var(--color-cyan)' }}>{kioskOrderSuccess.tableName}</strong>. Tu estilista o barbero lo atenderá de inmediato.</>
+                : <>Asignado a <strong style={{ color: 'var(--color-cyan)' }}>{kioskOrderSuccess.tableName}</strong>.</>}
             </p>
 
             <div style={{ background: '#f8fafc', border: '2px dashed var(--color-emerald)', borderRadius: '16px', padding: '14px', margin: '16px 0' }}>
@@ -3294,7 +3388,7 @@ export default function Showcase({ isPublicView = false }) {
               className="btn-primary"
               style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}
             >
-              {isFoodBusiness ? '¡Entendido! Volver al Menú' : '¡Entendido! Volver a la Tienda'}
+              {isBeautyBusiness ? '¡Entendido! Volver a la Carta' : (isFoodBusiness ? '¡Entendido! Volver al Menú' : '¡Entendido! Volver a la Tienda')}
             </button>
           </div>
         </div>
@@ -3388,7 +3482,7 @@ export default function Showcase({ isPublicView = false }) {
                 className="btn-primary"
                 style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}
               >
-                {isOnline || !isFoodBusiness ? '¡Entendido! Volver a la Tienda' : '¡Entendido! Volver al Menú'}
+                {isBeautyBusiness ? '¡Entendido! Volver a la Carta' : (isOnline || !isFoodBusiness ? '¡Entendido! Volver a la Tienda' : '¡Entendido! Volver al Menú')}
               </button>
             </div>
           </div>

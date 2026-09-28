@@ -3,7 +3,7 @@ import { usePuntoNexus } from '../context/PuntoNexusContext';
 import { 
   Scissors, Crown, Users, Calendar, Clock, MessageSquare, AlertTriangle, 
   CheckCircle2, Plus, Search, Filter, RefreshCw, ShieldAlert, Award, TrendingUp, 
-  DollarSign, Package, ChevronRight, Zap, Check, X, Phone, UserCheck, Flame, HeartHandshake, Eye, Sparkles
+  DollarSign, Package, ChevronRight, Zap, Check, X, Phone, UserCheck, Flame, HeartHandshake, Eye, Sparkles, QrCode
 } from 'lucide-react';
 import DualCurrencyDisplay from './DualCurrencyDisplay';
 import { playSound } from '../utils/soundEffects';
@@ -727,28 +727,53 @@ export default function BeautyPredictiveModule({ setActiveTab: setAppTab } = {})
           </button>
 
           {setAppTab && (
-            <button
-              type="button"
-              onClick={() => setAppTab('pos')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '10px 16px',
-                borderRadius: '12px',
-                background: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid rgba(16, 185, 129, 0.28)',
-                color: '#34d399',
-                fontWeight: 800,
-                fontSize: '12.5px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              title="Ir al Terminal de Punto de Venta"
-            >
-              <DollarSign size={15} style={{ color: '#10b981' }} />
-              <span>Terminal POS</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setAppTab('showcase')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(6, 182, 212, 0.12)',
+                  border: '1px solid rgba(6, 182, 212, 0.28)',
+                  color: '#38bdf8',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Abrir Carta Digital y Códigos QR para Sillones"
+              >
+                <QrCode size={15} style={{ color: '#06b6d4' }} />
+                <span>Carta QR Salón</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAppTab('pos')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.28)',
+                  color: '#34d399',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Ir al Terminal de Punto de Venta"
+              >
+                <DollarSign size={15} style={{ color: '#10b981' }} />
+                <span>Terminal POS</span>
+              </button>
+            </>
           )}
         </div>
       </div>
